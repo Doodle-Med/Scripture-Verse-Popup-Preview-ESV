@@ -1,0 +1,3 @@
+[submodule "bible_api"]
+	path = bible_api
+	url = https://github.com/seven1m/bible_api.git
