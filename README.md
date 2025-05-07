@@ -1,43 +1,19 @@
-# Scripture-Verse-Popup-Preview-ESV
+# Scripture Verse Popup Preview ESV
 
-Scripture Verse Popup Preview ESV is a Chrome extension that provides an instant preview of Bible verses when you hover over or select a scripture reference on any webpage.
+A Chrome extension that lets you hover-select a Bible reference on any web page and see an instant ESV verse preview. Also includes a browser popup for manual verse lookup.
 
 ## Features
+- Modern, responsive popup UI
+- Automatic dark/light mode based on system or browser
+- Supports multi-chapter and multi-verse references
+- No personal data collected (see privacy.html)
 
-- Automatically detects Bible references on webpages.
-- Displays a popup with the verse content when you hover over or select a reference.
-- Supports ESV (English Standard Version) translation for verse previews.
-- Works seamlessly on any webpage with scripture references.
+## Usage
+- Select a Bible reference on any web page to see a popup preview
+- Or click the extension icon and use the popup to look up any reference
 
-## How It Works
-
-1. Highlight or hover over any Bible reference (e.g., "Philippians 4:13").
-2. The extension fetches the verse content and displays it in a popup.
-3. The popup includes the verse reference and text for quick readability.
-
-### Example
-
-Here's an example of how the extension works:
-
-![Scripture Verse Popup Example](https://raw.githubusercontent.com/Doodle-Med/Scripture-Verse-Popup-Preview-ESV/refs/heads/main/new.png)
-
-In this example, when hovering over "Philippians 4:13," the following popup appears:
-
-> **Philippians 4:13**  
-> _"I can do all things through Christ, who strengthens me."_
-
-## Installation
-
-1. Clone or download the repository.
-2. Open Chrome and navigate to `chrome://extensions/`.
-3. Enable "Developer mode" in the top-right corner.
-4. Click "Load unpacked" and select the root folder of this repository.
-5. The extension is now ready to use.
+## Privacy
+This extension does not collect, store, or transmit any personal or sensitive user data. See [privacy.html](privacy.html).
 
 ## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-Enjoy an enriched browsing experience with instant access to Bible verses!
+MIT 
