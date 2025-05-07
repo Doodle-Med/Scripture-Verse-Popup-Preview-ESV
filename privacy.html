@@ -3,15 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <title>Privacy Policy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 2em; color: #222; background: #fff; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f7f7fa;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .privacy-container {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 2.5em 2em 2em 2em;
+      max-width: 480px;
+      width: 100%;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 0.5em;
+      color: #2a3a4a;
+      letter-spacing: 0.5px;
+    }
+    p, ul {
+      font-size: 1.08em;
+      line-height: 1.7;
+      margin-bottom: 1.2em;
+    }
+    ul {
+      padding-left: 1.2em;
+    }
+    li {
+      margin-bottom: 0.5em;
+    }
     @media (prefers-color-scheme: dark) {
-      body { color: #e0e0e0; background: #181a1b; }
+      body { background: #181a1b; color: #e0e0e0; }
+      .privacy-container { background: #23272a; color: #e0e0e0; box-shadow: 0 4px 24px rgba(0,0,0,0.35); }
+      h1 { color: #e0e0e0; }
     }
   </style>
 </head>
 <body>
-  <h1>Privacy Policy</h1>
-  <p>This extension does not collect, store, or transmit any personal or sensitive user data.</p>
+  <div class="privacy-container">
+    <h1>Privacy Policy</h1>
+    <p><strong>Scripture Verse Popup Preview ESV</strong> is designed with your privacy in mind. We do <u>not</u> collect, store, or transmit any personal, sensitive, or identifiable user data.</p>
+    <ul>
+      <li>No personal information is collected or shared.</li>
+      <li>No browsing history or website content is tracked or stored.</li>
+      <li>All user preferences (such as translation choice or API key) are stored <strong>locally</strong> in your browser using Chrome's secure storage and are never transmitted to any server controlled by the extension author.</li>
+      <li>The extension only communicates with public Bible APIs to retrieve verse text when you request it. No user-identifiable information is sent in these requests.</li>
+    </ul>
+    <p>If you have any questions or concerns about privacy, please contact the extension author via the Chrome Web Store listing.</p>
+  </div>
 </body>
 </html> 
