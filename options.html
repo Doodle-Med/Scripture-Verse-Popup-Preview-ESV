@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Extension Options</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 2em; color: #222; background: #fff; max-width: 400px; }
+    label { display: block; margin-top: 18px; font-weight: 600; }
+    input, select { width: 100%; padding: 8px; font: inherit; margin-top: 4px; border-radius: 6px; border: 1px solid #333; background: #fff; color: #222; }
+    button { font-weight: 600; cursor: pointer; margin-top: 18px; width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #333; background: #fff; color: #222; }
+    .info { font-size: 0.9em; color: #555; margin-top: 5px; }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e0e0e0; background: #181a1b; }
+      input, select, button { background: #181a1b; color: #e0e0e0; border-color: #444; }
+      .info { color: #aaa; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Scripture Popup Options</h2>
+  
+  <label for="esvApiKeyInput">ESV API Token</label>
+  <input id="esvApiKeyInput" type="text" placeholder="Paste your ESV API token here">
+  <p class="info">This key is stored locally and only used when ESV translation is selected. Get from <a href="https://www.esv.org/account/api/" target="_blank" rel="noopener">esv.org</a>.</p>
+
+  <label for="defaultTranslationSelect">Default Translation for Popups</label>
+  <select id="defaultTranslationSelect">
+    <!-- Options will be populated by script -->
+  </select>
+  <p class="info">This sets the initial translation when a popup appears. Your last selection in a popup may override this for that session.</p>
+
+  <label for="bibleApiKeyInput">api.bible API Key</label>
+  <input id="bibleApiKeyInput" type="text" placeholder="Enter your api.bible Key">
+  <p class="info">Needed for NKJV, NASB etc. Get from <a href="https://scripture.api.bible/" target="_blank" rel="noopener">scripture.api.bible</a>.</p>
+
+  <button id="saveOptionsButton">Save Options</button>
+  <div id="statusMessage" style="margin-top:12px;font-size:14px; height: 1em;"></div>
+  <script src="options.js"></script>
+</body>
+</html> 

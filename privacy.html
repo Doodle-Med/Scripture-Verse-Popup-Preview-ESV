@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Privacy Policy - Scripture Verse Popup Preview ESV</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f7f7fa;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .privacy-container {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 2.5em 2em 2em 2em;
+      max-width: 600px; /* Increased width for more content */
+      width: 90%; /* Responsive width */
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 0.5em;
+      color: #2a3a4a;
+      letter-spacing: 0.5px;
+    }
+    h2 {
+      font-size: 1.4em;
+      margin-top: 1.5em;
+      margin-bottom: 0.5em;
+      color: #2a3a4a;
+    }
+    p, ul {
+      font-size: 1.08em;
+      line-height: 1.7;
+      margin-bottom: 1.2em;
+    }
+    ul {
+      padding-left: 1.5em; /* Adjusted padding */
+    }
+    li {
+      margin-bottom: 0.6em; /* Adjusted spacing */
+    }
+    strong {
+      font-weight: 600;
+    }
+    code {
+      background-color: #eee;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #181a1b; color: #e0e0e0; }
+      .privacy-container { background: #23272a; color: #e0e0e0; box-shadow: 0 4px 24px rgba(0,0,0,0.35); }
+      h1, h2 { color: #e0e0e0; }
+      code { background-color: #333; color: #e0e0e0;}
+    }
+  </style>
+</head>
+<body>
+  <div class="privacy-container">
+    <h1>Privacy Policy</h1>
+    <p><strong>Last Updated: May 16, 2024</strong></p>
+    <p>This Privacy Policy explains how <strong>Scripture Verse Popup Preview ESV</strong> (the "Extension") handles your information. Your privacy is a top priority.</p>
+
+    <h2>1. Information We Do Not Collect</h2>
+    <p>The Extension is designed to function without collecting or transmitting any of your personal or sensitive user data. Specifically, we <strong>do not</strong> collect, store, track, or transmit:</p>
+    <ul>
+      <li>Your browsing history or the content of websites you visit (other than the Bible references you select).</li>
+      <li>Your IP address or any other network identifiers.</li>
+      <li>Any personal information such as your name, email address, or location.</li>
+      <li>Any usage analytics or telemetry about how you interact with the Extension, beyond what is aggregated anonymously by the Chrome Web Store itself for all extensions.</li>
+    </ul>
+
+    <h2>2. Information Stored Locally</h2>
+    <p>To enhance your experience and provide configurable options, the Extension stores certain preferences <strong>locally in your browser</strong> using Chrome's secure storage (`chrome.storage.sync`). This data is synchronized across your signed-in Chrome browsers but is not accessible to the Extension author or any third party, other than Google as part of its Chrome Sync service. This locally stored data includes:</p>
+    <ul>
+      <li><strong>ESV API Key</strong>: If you choose to use the ESV translation and provide an API key in the Extension's options page, this key is stored locally. It is only sent directly to the ESV API (<code>https://api.esv.org/</code>) when you request verses from the ESV translation.</li>
+      <li><strong>Default Translation Preference</strong>: The default Bible translation you select in the options page.</li>
+      <li><strong>Last Selected Translation</strong>: The last translation you chose in the verse preview popup, to remember your preference for the next popup.</li>
+    </ul>
+    <p>This data remains on your computer and is managed by your browser.</p>
+
+    <h2>3. Communication with External Bible APIs</h2>
+    <p>When you select a Bible reference or use the browser action popup to look up a verse, the Extension communicates with external, public Bible APIs to retrieve the scripture text. The specific API used depends on the translation selected, as configured in the Extension's `bibles.json` file. These APIs may include:</p>
+    <ul>
+      <li><strong>ESV API (api.esv.org)</strong>: When ESV translation is used. Your ESV API key (if provided via `bibles.json` through the build process, or potentially from local storage if using older versions or local modifications) and the requested Bible reference are sent.</li>
+      <li><strong>CDN Bible API (cdn.jsdelivr.net/gh/wldeh/bible-api/)</strong>: For translations like KJV, ASV, WEB. Only the requested Bible reference (and necessary path components for the API) are sent. No user-specific API key is sent from the extension for these.</li>
+      <li><strong>Bible API (bible-api.com)</strong>: Can also be used for various translations. Only the requested Bible reference is sent. No user-specific API key is sent from the extension for these.</li>
+      <li><strong>American Bible Society API (api.scripture.api.bible)</strong>: If configured for translations like NKJV or NASB. An API key (from `bibles.json`, ideally injected during build) and the requested reference/Bible ID are sent.</li>
+    </ul>
+    <p>The Extension only sends the minimal information required to fetch the requested scripture (i.e., the Bible reference and API key where necessary as per `bibles.json` configuration). No user-identifiable information beyond what is intrinsic to an API request (like your IP address, which is handled by the API provider according to their own privacy policies) is sent by this Extension to these APIs.</p>
+    <p>We encourage you to review the privacy policies of these third-party Bible API providers if you have concerns about how they handle data.</p>
+
+    <h2>4. `bibles.json` Configuration File</h2>
+    <p>The Extension includes a `bibles.json` file that maps Bible translation codes to their display names and API configurations. This file is part of the Extension's static assets and is fetched locally using `chrome.runtime.getURL('bibles.json')`. API keys for services like ESV or scripture.api.bible are intended to be placeholders in the repository version of this file and replaced with actual keys during a build process (e.g., via GitHub Actions secrets) for published versions. For KJV, ASV, WEB, etc., that use keyless public APIs (like the CDN or bible-api.com), no keys are stored or needed in this file. No external communication is initiated by the Extension to fetch or update this configuration file post-installation.</p>
+
+    <h2>5. Security</h2>
+    <p>We take reasonable precautions to protect the information stored locally by the Extension. However, no method of electronic storage is 100% secure. Your ESV API key is stored as you provide it, and it's your responsibility to ensure its security if obtained from Crossway.</p>
+
+    <h2>6. Changes to This Privacy Policy</h2>
+    <p>We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy within the Extension or on its Chrome Web Store listing. You are advised to review this Privacy Policy periodically for any changes.</p>
+
+    <h2>7. Contact Us</h2>
+    <p>If you have any questions or concerns about this Privacy Policy or the Extension's practices, please contact the extension author via the Chrome Web Store listing for Scripture Verse Popup Preview ESV.</p>
+  </div>
+</body>
+</html> 
