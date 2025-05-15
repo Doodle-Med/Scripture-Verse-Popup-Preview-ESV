@@ -26,15 +26,13 @@ jobs:
       - name: Bump Version in manifest.json
         id: bump_version
         run: |
-          cd "${{ github.workspace }}" # Ensure we are in the root of the checkout
-          MANIFEST_PATH="Downloads/Scripture verse fetcher final draft/manifest.json"
+          # MANIFEST_PATH is now at the root
+          MANIFEST_PATH="manifest.json"
           if [ ! -f "$MANIFEST_PATH" ]; then
             echo "Error: manifest.json not found at $MANIFEST_PATH"
-            echo "Listing directory contents:"
-            ls -R "Downloads/Scripture verse fetcher final draft/"
+            ls -la # List contents of current directory for debugging
             exit 1
           fi
-          # Use a temporary file in a writable location
           TMP_MANIFEST="/tmp/m.tmp"
           jq --argjson current_version "$(jq -r .version \"$MANIFEST_PATH\")" \
              '.version = ($current_version | split(".") | .[0] + "." + .[1] + "." + ((.[2]|tonumber)+1|tostring))' \
@@ -47,13 +45,15 @@ jobs:
 
       - name: Create ZIP file
         run: |
-          cd "${{ github.workspace }}/Downloads/Scripture verse fetcher final draft" # CD into the extension's directory
-          zip -r ../../extension.zip . # Zip contents from within this directory, output to workspace root
+          # Files are now at the root of the workspace
+          zip -r extension.zip . -x ".git*" "*.DS_Store" "Downloads/*" 
+          # Exclude .git files, .DS_Store, and the old Downloads directory if it accidentally gets created by checkout strategy
         shell: bash
+
       - name: Upload to Chrome Web Store
         uses: mnao305/chrome-extension-upload@v4.0.1
         with:
-          file-path: extension.zip
+          file-path: extension.zip # Should be at the root of the workspace
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
           client-id: ${{ secrets.CHROME_CLIENT_ID }}
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
@@ -64,11 +64,9 @@ jobs:
 
       - name: Commit and Push Version Bump
         run: |
-          cd "${{ github.workspace }}"
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add "Downloads/Scripture verse fetcher final draft/manifest.json"
-          # Check if there are changes to commit to avoid error if version bump didn't change file (e.g., dry run)
+          git add manifest.json # Path is now direct
           if ! git diff --staged --quiet; then
             git commit -m "Bump version to ${{ steps.bump_version.outputs.VERSION }} [skip ci]"
             git push
