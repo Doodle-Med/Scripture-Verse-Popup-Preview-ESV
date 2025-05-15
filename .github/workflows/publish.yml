@@ -58,7 +58,7 @@ jobs:
           client-id: ${{ secrets.CHROME_CLIENT_ID }}
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          # optional flags
+          publish: true
           # publish: false # set to true to publish immediately (optional)
           # testers: false # set to true to publish to testers (optional)
 
