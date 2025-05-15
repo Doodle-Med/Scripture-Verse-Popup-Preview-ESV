@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Verse lookup</title>
+<style>
+:root {
+  --popup-bg: #fff;
+  --popup-text: #222;
+  --popup-border: #333;
+  --popup-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --popup-bg: #181a1b;
+    --popup-text: #e0e0e0;
+    --popup-border: #444;
+    --popup-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  }
+}
+body {
+  background: var(--popup-bg);
+  color: var(--popup-text);
+  font: 16px/1.5 'Segoe UI', Roboto, Arial, sans-serif;
+  margin: 0;
+  padding: 18px 22px;
+  border-radius: 12px;
+  box-shadow: var(--popup-shadow);
+  border: 1.5px solid var(--popup-border);
+  min-width: 260px;
+  max-width: 400px;
+}
+label { display: block; margin-top: 10px; font-weight: 600; }
+select, input[type=text] {
+  width: 100%;
+  padding: 8px;
+  font: inherit;
+  margin-top: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--popup-border);
+  background: var(--popup-bg);
+  color: var(--popup-text);
+}
+button {
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--popup-border);
+  background: var(--popup-bg);
+  color: var(--popup-text);
+}
+pre {
+  white-space: pre-wrap;
+  margin-top: 16px;
+  font-size: 15px;
+}
+strong {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 8px;
+}
+em {
+  color: #888;
+  font-size: 13px;
+}
+.error-message {
+  color: #c0392b; /* A distinct error color */
+  font-weight: bold;
+}
+#esv-key-row { display: none; }
+</style>
+</head>
+<body>
+<!-- <label for="api">Bible API</label>
+<select id="api">
+  <option value="bible-api">bible-api.com (WEB, KJV, ASV)</option>
+  <option value="getbible">getbible.net (KJV, WEB, ASV, BBE, etc.)</option>
+  <option value="esv">Crossway ESV API</option>
+  <option value="eliran">Greek/Hebrew (Eliran API)</option>
+</select> -->
+<label for="translation">Translation</label>
+<select id="translation"></select>
+<input id="ref" placeholder="e.g. 1 Cor 6:19-20">
+<button id="go">Parse</button>
+<pre id="out"></pre>
+<script src="browserActionPopup.js"></script>
+</body>
+</html>

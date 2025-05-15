@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Scripture Verse Popup Preview ESV",
+  "version": "1.5.0",
+  "description": "Instant Bible verse previews on hover. Multi-translation, ranges, chapters. Secure ESV API key option. Privacy focused.",
+  "icons": {
+    "16":  "icon_16.png",
+    "48":  "icon_48.png",
+    "128": "icon_128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://api.esv.org/*",
+    "https://cdn.jsdelivr.net/*",
+    "https://api.scripture.api.bible/*",
+    "https://bible-api.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Verse lookup"
+  },
+  "content_scripts": [
+    {
+      "matches": [ "<all_urls>" ],
+      "js": [ "content.js" ],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [ 
+        "bibles.json", 
+        "browserActionPopup.js", 
+        "injectedPopup.js" 
+      ],
+      "matches": [ "<all_urls>" ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  },
+  "options_page": "options.html"
+}

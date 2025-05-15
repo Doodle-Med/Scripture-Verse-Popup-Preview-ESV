@@ -1,0 +1,79 @@
+name: Publish to Chrome Web Store
+
+on:
+  push:
+    branches:
+      - master # Or your main branch
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18' # Or your preferred Node.js version
+
+      - name: Install dependencies
+        run: |
+          # If you have a package.json and need to install, uncomment the next line
+          # npm install 
+          echo "No server-side dependencies to install for this step, or handled by package.json if present"
+
+      - name: Bump Version in manifest.json
+        id: bump_version
+        run: |
+          cd "${{ github.workspace }}" # Ensure we are in the root of the checkout
+          MANIFEST_PATH="Downloads/Scripture verse fetcher final draft/manifest.json"
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            echo "Error: manifest.json not found at $MANIFEST_PATH"
+            echo "Listing directory contents:"
+            ls -R "Downloads/Scripture verse fetcher final draft/"
+            exit 1
+          fi
+          # Use a temporary file in a writable location
+          TMP_MANIFEST="/tmp/m.tmp"
+          jq --argjson current_version "$(jq -r .version \"$MANIFEST_PATH\")" \
+             '.version = ($current_version | split(".") | .[0] + "." + .[1] + "." + ((.[2]|tonumber)+1|tostring))' \
+             "$MANIFEST_PATH" > "$TMP_MANIFEST" && mv "$TMP_MANIFEST" "$MANIFEST_PATH"
+          
+          NEW_VERSION=$(jq -r .version "$MANIFEST_PATH")
+          echo "New version: $NEW_VERSION"
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Create ZIP file
+        run: |
+          cd "${{ github.workspace }}/Downloads/Scripture verse fetcher final draft" # CD into the extension's directory
+          zip -r ../../extension.zip . # Zip contents from within this directory, output to workspace root
+        shell: bash
+      - name: Upload to Chrome Web Store
+        uses: mnao305/chrome-extension-upload@v4.0.1
+        with:
+          file-path: extension.zip
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          # optional flags
+          # publish: false # set to true to publish immediately (optional)
+          # testers: false # set to true to publish to testers (optional)
+
+      - name: Commit and Push Version Bump
+        run: |
+          cd "${{ github.workspace }}"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "Downloads/Scripture verse fetcher final draft/manifest.json"
+          # Check if there are changes to commit to avoid error if version bump didn't change file (e.g., dry run)
+          if ! git diff --staged --quiet; then
+            git commit -m "Bump version to ${{ steps.bump_version.outputs.VERSION }} [skip ci]"
+            git push
+          else
+            echo "No changes to commit for version bump."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This is usually automatically available
