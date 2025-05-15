@@ -1,0 +1,69 @@
+name: Publish to Chrome Web Store
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Ensure jq is installed for the 'bump' script
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install npm dependencies
+        run: npm install --no-audit --no-fund
+      
+      - name: Bump version in manifest
+        run: npm run bump
+
+      - name: Inject API Keys into bibles.json
+        if: env.ESV_API_KEY != '' || env.BIBLE_API_KEY != '' # Only run if keys are set
+        env:
+          ESV_API_KEY: ${{ secrets.ESV_API_KEY }}
+          BIBLE_API_KEY: ${{ secrets.BIBLE_API_KEY }} # For NKJV, NASB if used via scripture.api.bible
+        run: |
+          echo "Injecting API keys..."
+          if [[ ! -f bibles.json ]]; then
+            echo "Error: bibles.json not found!"
+            exit 1
+          fi
+          if [[ -n "$ESV_API_KEY" ]]; then
+            sed -i "s|__ESV_API_KEY_PLACEHOLDER__|${ESV_API_KEY}|g" bibles.json
+            echo "ESV_API_KEY injected."
+          else
+            echo "ESV_API_KEY secret not set, skipping ESV placeholder replacement."
+          fi
+          if [[ -n "$BIBLE_API_KEY" ]]; then
+            sed -i "s|__BIBLE_API_KEY_PLACEHOLDER__|${BIBLE_API_KEY}|g" bibles.json
+            echo "BIBLE_API_KEY injected."
+          else
+            echo "BIBLE_API_KEY secret not set, skipping general Bible API placeholder replacement."
+          fi
+          echo "bibles.json after potential injection (first 20 lines):"
+          head -n 20 bibles.json
+        shell: bash
+
+      - name: Create ZIP file
+        run: npm run zip
+
+      - name: Upload to Chrome Web Store
+        # This step assumes extension.zip is created in the root by 'npm run zip'
+        run: |
+          npx chrome-webstore-upload-cli upload \
+            --extension-id ${{ secrets.CHROME_EXTENSION_ID }} \
+            --client-id ${{ secrets.CHROME_CLIENT_ID }} \
+            --client-secret ${{ secrets.CHROME_CLIENT_SECRET }} \
+            --refresh-token ${{ secrets.CHROME_REFRESH_TOKEN }} \
+            --source extension.zip
+          npx chrome-webstore-upload-cli publish \
+            --extension-id ${{ secrets.CHROME_EXTENSION_ID }} \
+            --client-id ${{ secrets.CHROME_CLIENT_ID }} \
+            --client-secret ${{ secrets.CHROME_CLIENT_SECRET }} \
+            --refresh-token ${{ secrets.CHROME_REFRESH_TOKEN }}
