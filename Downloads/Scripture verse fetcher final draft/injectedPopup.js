@@ -1,6 +1,6 @@
-console.log('[PSI_STABLE_DEBUG] injectedPopup.js: Script executing (Final Polish).');
+console.log('[PSI_STABLE_DEBUG] injectedPopup.js: Script executing (Final Polish v2 - Async IIFE).');
 
-(function() {
+(async function() {
     'use strict';
     // console.log('[PSI_STABLE_DEBUG] injectedPopup.js: IIFE executing.'); // Already logged by script exec.
 
@@ -30,14 +30,25 @@ console.log('[PSI_STABLE_DEBUG] injectedPopup.js: Script executing (Final Polish
     const scriptData = JSON.parse(popupElement.getAttribute('data-svp-payload'));
     popupElement.removeAttribute('data-svp-payload');
     
-    const { biblesData, initialRefs, selectionRect, optionsPageUrl, userEsvApiKey, userApiBibleApiKey, userDefaultGlobalTranslation } = scriptData;
-    console.log('[SVP_DEBUG] injectedPopup.js: Data received:', { 
-        bibDataKeys: Object.keys(biblesData || {}).length, 
+    const { 
+        biblesData, 
+        initialRefs, 
+        selectionRect, 
+        optionsPageUrl, 
+        userEsvApiKey, 
+        userApiBibleApiKey, 
+        userDefaultGlobalTranslation, 
+        lastSelectedTranslationContent // Now received from content.js
+    } = scriptData;
+
+    console.log('[SVP_DEBUG] injectedPopup.js: Data received (v3 - All settings via payload):', { 
+        numBibs: Object.keys(biblesData || {}).length, 
         numRefs: initialRefs?.length, 
         optionsUrlOK: !!optionsPageUrl, 
         esvKeyPassed: !!userEsvApiKey, 
         bibleApiKeyPassed: !!userApiBibleApiKey,
-        userDefaultGlobalTranslationPassed: userDefaultGlobalTranslation
+        userDefaultGlobalTranslationPassed: userDefaultGlobalTranslation,
+        lastSelectedTranslationContentPassed: lastSelectedTranslationContent
     });
 
     if (!biblesData || Object.keys(biblesData).length === 0 || !initialRefs || !Array.isArray(initialRefs) || initialRefs.length === 0 || !selectionRect) {
@@ -60,7 +71,8 @@ console.log('[PSI_STABLE_DEBUG] injectedPopup.js: Script executing (Final Polish
                 maxHeight: '480px', // Increased max height slightly
                 overflowY: 'auto',
                 padding: '12px', // Adjusted padding
-                borderRadius: '8px'
+                borderRadius: '8px',
+                boxShadow: '0 5px 15px rgba(0,0,0,0.2)'
             },
             select: {
                 fontSize: '12px', 
@@ -70,15 +82,17 @@ console.log('[PSI_STABLE_DEBUG] injectedPopup.js: Script executing (Final Polish
                 width: 'auto', // Allow select to size to content
                 maxWidth: '180px', // Max width for select to prevent overflow
                 border: '1px solid #ccc',
-                outline: 'none'
+                outline: 'none',
+                float: 'right' // Keep select to the right
             },
             actionsContainer: {
                 display: 'flex',
-                justifyContent: 'flex-end',
+                justifyContent: 'flex-end', // Align buttons to the right, select is floated
                 alignItems: 'center',
-                padding: '6px 0px', 
-                marginBottom: '10px',
-                borderBottom: isDarkMode ? '1px solid #404040' : '1px solid #e9e9e9'
+                padding: '6px 0px 0px 0px', // Adjusted padding
+                marginBottom: '8px', // Space before content
+                // borderBottom: isDarkMode ? '1px solid #404040' : '1px solid #e9e9e9' // Removed border, select has its own line effectively
+                clear: 'both' // Ensure it clears the floated select
             },
             actionButton: {
                 fontSize: '11px',
@@ -92,10 +106,11 @@ console.log('[PSI_STABLE_DEBUG] injectedPopup.js: Script executing (Final Polish
                 opacity: '0.85',
                 transition: 'opacity 0.2s, background-color 0.2s, color 0.2s, border-color 0.2s'
             },
-            contentWrapper: {
+            contentWrapper: { // This style is applied to contentDiv directly
                 padding: '5px 2px',
                 borderRadius: '4px',
-                marginTop: '5px'
+                marginTop: '0px', // No margin needed if actionsContainer handles spacing
+                clear: 'both' // Ensure it's below the floated select and actions
             },
             passageText: { fontSize: '14px', lineHeight: '1.65' },
             referenceTitle: { fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', display: 'block' },
@@ -502,71 +517,62 @@ console.log('[PSI_STABLE_DEBUG] injectedPopup.js: Script executing (Final Polish
     // Populate and set initial translation
     if (translationSelect.options.length === 0) {
          Object.keys(biblesData).forEach(code => {
-            // Defensive check: ensure code is not already an option to prevent duplicates if script re-runs somehow
             if (!translationSelect.querySelector(`option[value="${CSS.escape(code)}"]`)) {
                 const opt = document.createElement('option');
                 opt.value = code;
-                opt.textContent = biblesData[code].displayName || biblesData[code].name || code; // Added .name as a fallback
+                opt.textContent = biblesData[code].displayName || biblesData[code].name || code;
                 translationSelect.appendChild(opt);
             }
         });
     }
     
     let finalInitialTranslation = 'esv'; // Ultimate fallback
+    let usedSource = 'calculated fallback (default)';
 
-    // 1. Try last selected in content popup (if storage access works for this specific key)
-    const lastContentTranslation = await new Promise(resolve => {
-        if (chrome.storage && chrome.storage.sync) {
-            chrome.storage.sync.get({ [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: null }, items => {
-                if (chrome.runtime.lastError) {
-                    console.warn('[SVP_WARN] injectedPopup.js: Error getting last content translation:', chrome.runtime.lastError.message);
-                    resolve(null);
-                } else {
-                    resolve(items[STORAGE_KEY_LAST_TRANSLATION_CONTENT]);
-                }
-            });
-        } else {
-            console.warn('[SVP_WARN] injectedPopup.js: chrome.storage.sync not available for last content translation.');
-            resolve(null);
-        }
-    });
+    // Priority: 
+    // 1. Last selected in a content popup (passed from content.js)
+    // 2. User's global default (passed from content.js)
+    // 3. Calculated fallback (ESV > first in select > first in biblesData > KJV)
 
-    if (lastContentTranslation && translationSelect.querySelector(`option[value="${CSS.escape(lastContentTranslation)}"]`)) {
-        finalInitialTranslation = lastContentTranslation;
-        console.log(`[SVP_DEBUG] Initial translation from LAST_CONTENT: ${finalInitialTranslation}`);
+    if (lastSelectedTranslationContent && translationSelect.querySelector(`option[value="${CSS.escape(lastSelectedTranslationContent)}"]`)) {
+        finalInitialTranslation = lastSelectedTranslationContent;
+        usedSource = 'last content page selection (via payload)';
     } else if (userDefaultGlobalTranslation && translationSelect.querySelector(`option[value="${CSS.escape(userDefaultGlobalTranslation)}"]`)) {
-        // 2. Else, use the global default passed from content.js (originating from options page)
         finalInitialTranslation = userDefaultGlobalTranslation;
-        console.log(`[SVP_DEBUG] Initial translation from USER_DEFAULT_GLOBAL (via payload): ${finalInitialTranslation}`);
+        usedSource = 'user global default (via payload)';
     } else {
-        // 3. Else, calculate a fallback (ESV > first in select > first in biblesData > KJV)
         const esvOpt = translationSelect.querySelector('option[value="esv"]');
         const firstOpt = translationSelect.options[0];
         if (esvOpt) finalInitialTranslation = 'esv';
         else if (firstOpt) finalInitialTranslation = firstOpt.value;
         else if (biblesData && biblesData['esv']) finalInitialTranslation = 'esv';
         else if (biblesData && Object.keys(biblesData).length > 0) finalInitialTranslation = Object.keys(biblesData)[0];
-        else finalInitialTranslation = 'kjv'; // Absolute fallback if all else fails
-        console.log(`[SVP_DEBUG] Initial translation from CALCULATED_FALLBACK: ${finalInitialTranslation}`);
+        else finalInitialTranslation = 'kjv';
+        usedSource = `calculated fallback (L:[${lastSelectedTranslationContent}], G:[${userDefaultGlobalTranslation}] invalid/missing)`;
     }
 
     if (translationSelect.querySelector(`option[value="${CSS.escape(finalInitialTranslation)}"]`)) {
         translationSelect.value = finalInitialTranslation;
     } else if (translationSelect.options.length > 0) {
-        translationSelect.value = translationSelect.options[0].value; // Fallback to first available if preferred not found
+        translationSelect.value = translationSelect.options[0].value;
         console.warn(`[SVP_WARN] Preferred initial translation '${finalInitialTranslation}' not found, using first available: ${translationSelect.value}`);
+        usedSource += ' -> first available option as preferred not in select';
     }
 
-    console.log(`[SVP_DEBUG] Final initial translation set to: ${translationSelect.value}`);
-    processAndDisplayRefs(refsToFetch, translationSelect.value);
+    console.log(`[SVP_DEBUG] Final initial translation set to: ${translationSelect.value} (Source: ${usedSource})`);
+    await processAndDisplayRefs(refsToFetch, translationSelect.value);
 
     translationSelect.addEventListener('change', (e) => {
         const newTranslation = e.target.value;
         if (chrome.storage && chrome.storage.sync) {
-            console.log('[SVP_DEBUG] InjectedPopup: Saving last used content translation:', newTranslation);
-            chrome.storage.sync.set({ [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: newTranslation });
+            console.log('[SVP_DEBUG] InjectedPopup: Saving last used content translation to storage:', newTranslation);
+            chrome.storage.sync.set({ [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: newTranslation }, () => {
+                 if (chrome.runtime.lastError) {
+                    console.error("[SVP_ERROR] InjectedPopup: Error saving last content translation:", chrome.runtime.lastError.message);
+                }
+            });
         }
-        processAndDisplayRefs(refsToFetch, newTranslation);
+        processAndDisplayRefs(refsToFetch, newTranslation); 
     });
 
     translationSelect.addEventListener('mousedown', e => e.stopPropagation());

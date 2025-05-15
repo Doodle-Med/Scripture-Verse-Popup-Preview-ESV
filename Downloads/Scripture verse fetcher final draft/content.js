@@ -4,7 +4,8 @@ console.log('[SVP_INFO] content.js: PSI-STABLE loaded.');
 const POPUP_Z_INDEX = '2147483647'; // Max z-index
 const LEVENSHTEIN_BOOK_MATCH_THRESHOLD = 2; // Max distance for a fuzzy book name match
 const SELECTION_DEBOUNCE_MS = 300; // Delay for debouncing mouseup events
-const STORAGE_KEY_USER_DEFAULT_TRANSLATION = 'userDefaultGlobalTranslation'; // Added
+const STORAGE_KEY_LAST_TRANSLATION_CONTENT = 'lastSelectedTranslationContent'; // Added
+const STORAGE_KEY_USER_DEFAULT_TRANSLATION = 'userDefaultGlobalTranslation';
 const STORAGE_KEY_USER_ESV_API_KEY = 'userEsvApiKey';
 const STORAGE_KEY_USER_BIBLE_API_KEY = 'userApiBibleApiKey';
 
@@ -444,25 +445,31 @@ async function handleTextSelectionEvent(event) {
         const rect = range.getBoundingClientRect();
     const optionsPageUrl = chrome.runtime.getURL('options.html');
 
-    // Fetch API keys and global default translation from storage to pass to injected script
+    // Fetch API keys, global default, AND last content translation from storage
     const settingsFromStorage = await new Promise(resolve => {
         chrome.storage.sync.get(
             {
                 [STORAGE_KEY_USER_ESV_API_KEY]: '',
                 [STORAGE_KEY_USER_BIBLE_API_KEY]: '',
-                [STORAGE_KEY_USER_DEFAULT_TRANSLATION]: 'esv' // Default to 'esv' if not set
+                [STORAGE_KEY_USER_DEFAULT_TRANSLATION]: 'esv',
+                [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: null // Fetch this too
             },
             items => {
                 if (chrome.runtime.lastError) {
                     console.error("[SVP_ERROR] content.js: Error fetching settings from storage:", chrome.runtime.lastError.message);
-                    resolve({ userEsvApiKey: '', userApiBibleApiKey: '', userDefaultGlobalTranslation: 'esv' }); 
+                    resolve({ 
+                        userEsvApiKey: '', 
+                        userApiBibleApiKey: '', 
+                        userDefaultGlobalTranslation: 'esv', 
+                        lastSelectedTranslationContent: null 
+                    }); 
                 } else {
                     resolve(items);
                 }
             }
         );
     });
-    console.log('[SVP_DEBUG] content.js: Fetched from storage for payload:', settingsFromStorage);
+    console.log('[SVP_DEBUG] content.js: Fetched settings from storage for payload:', settingsFromStorage);
 
     popup = document.createElement('div');
     popup.id = 'bible-popup-container';
@@ -501,7 +508,8 @@ async function handleTextSelectionEvent(event) {
         optionsPageUrl: optionsPageUrl,
         userEsvApiKey: settingsFromStorage[STORAGE_KEY_USER_ESV_API_KEY],
         userApiBibleApiKey: settingsFromStorage[STORAGE_KEY_USER_BIBLE_API_KEY],
-        userDefaultGlobalTranslation: settingsFromStorage[STORAGE_KEY_USER_DEFAULT_TRANSLATION] // Added
+        userDefaultGlobalTranslation: settingsFromStorage[STORAGE_KEY_USER_DEFAULT_TRANSLATION],
+        lastSelectedTranslationContent: settingsFromStorage[STORAGE_KEY_LAST_TRANSLATION_CONTENT] // Pass it
     }; 
     try {
         popup.setAttribute('data-svp-payload', JSON.stringify(scriptDataPayload));
