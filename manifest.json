@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scripture Verse Popup Preview ESV",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "description": "Instant Bible verse previews on hover. Multi-translation, ranges, chapters. Secure ESV API key option. Privacy focused.",
   "icons": {
     "16":  "icon_16.png",
