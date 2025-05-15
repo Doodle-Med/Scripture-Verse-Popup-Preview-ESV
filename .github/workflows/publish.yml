@@ -59,8 +59,6 @@ jobs:
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           publish: true
-          # publish: false # set to true to publish immediately (optional)
-          # testers: false # set to true to publish to testers (optional)
 
       - name: Commit and Push Version Bump
         run: |
