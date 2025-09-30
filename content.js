@@ -166,6 +166,8 @@ const bookMap = {
 };
 console.log('[PSI_DEBUG] content.js: bookMap defined with extended keys.');
 
+const SINGLE_CHAPTER_BOOKS = new Set(['Obadiah', 'Philemon', '2 John', '3 John', 'Jude']);
+
 // Levenshtein Distance function
 function levenshteinDistance(a, b) {
     if (a.length === 0) return b.length;
@@ -199,8 +201,10 @@ function parseReference(text) {
 
     const originalText = text;
     let normalizedText = text.replace(/[\u2013\u2014]/g, '-').replace(/\s+/g, ' ').trim();
-    normalizedText = normalizedText.replace(/^[\s"'.([{\\]+|[\s"'.():{}\\]]+$/g, '').trim(); 
-    normalizedText = normalizedText.replace(/[.,;:!?)]+$/, '').trim(); 
+    normalizedText = normalizedText
+        .replace(/^[\s"'\u2018\u2019\u201C\u201D.([{\\]+|[\s"'\u2018\u2019\u201C\u201D):.!?{}\\\]]+$/g, '')
+        .trim();
+    normalizedText = normalizedText.replace(/[.,;:!?)"'\u2018\u2019\u201C\u201D]+$/, '').trim();
 
     if (!normalizedText) return null;
 
@@ -281,13 +285,15 @@ function parseReference(text) {
 
     const result = { book: canonicalBookName, chapter: 0, startVerse: 1, endChapter: 0, endVerse: null };
     const cvPatterns = [
-        { regex: /^(\d+)[:\s.vV]+(\d+)\s*-+\s*(\d+)[:\s.vV]+(\d+)$/, type: 'Ch:Vs-Ch:Vs' }, 
-        { regex: /^(\d+)[:\s.vV]+(\d+)\s*-+\s*(\d+)$/, type: 'Ch:Vs-Vs' },       
-        { regex: /^(\d+)\s*-+\s*(\d+)$/, type: 'Ch-Ch' },                       
-        { regex: /^(\d+)[:\s.vV]+(\d+)$/, type: 'Ch:Vs' },                      
-        { regex: /^(\d+)$/, type: 'Ch-Only' }                                     
+        { regex: /^(\d+)[:\s.vV]+(\d+)\s*-+\s*(\d+)[:\s.vV]+(\d+)$/, type: 'Ch:Vs-Ch:Vs' },
+        { regex: /^(\d+)[:\s.vV]+(\d+)\s*-+\s*(\d+)$/, type: 'Ch:Vs-Vs' },
+        { regex: /^(\d+)\s*-+\s*(\d+)$/, type: 'Ch-Ch' },
+        { regex: /^(\d+)[:\s.vV]+(\d+)$/, type: 'Ch:Vs' },
+        { regex: /^(\d+)$/, type: 'Ch-Only' }
     ];
     let matchedCv = false;
+    let matchedPatternType = null;
+    let matchedCapture = null;
     for (const pattern of cvPatterns) {
         const cvMatch = chapterVersePart.match(pattern.regex);
         if (cvMatch) {
@@ -300,10 +306,38 @@ function parseReference(text) {
                 case 'Ch:Vs':       result.startVerse = parseInt(cvMatch[2], 10); result.endChapter = result.chapter; result.endVerse = result.startVerse; break;
                 case 'Ch-Only':     result.startVerse = 1; result.endChapter = result.chapter; result.endVerse = null; break;
             }
-            matchedCv = true; break;
+            matchedCv = true;
+            matchedPatternType = pattern.type;
+            matchedCapture = cvMatch;
+            break;
         }
     }
     if (!matchedCv) { console.warn(`[SVP_WARN] parseReference: No C:V pattern matched for part '${chapterVersePart}' (book: '${canonicalBookName}')`); return null; }
+
+    if (SINGLE_CHAPTER_BOOKS.has(result.book)) {
+        if (matchedPatternType === 'Ch-Only') {
+            const verseNumber = parseInt(matchedCapture[1], 10);
+            if (!Number.isNaN(verseNumber) && verseNumber > 0) {
+                result.chapter = 1;
+                result.startVerse = verseNumber;
+                result.endChapter = 1;
+                result.endVerse = verseNumber;
+            }
+        } else if (matchedPatternType === 'Ch-Ch') {
+            const startVerse = parseInt(matchedCapture[1], 10);
+            const endVerse = parseInt(matchedCapture[2], 10);
+            result.chapter = 1;
+            result.endChapter = 1;
+            if (!Number.isNaN(startVerse) && startVerse > 0) {
+                result.startVerse = startVerse;
+            }
+            if (!Number.isNaN(endVerse) && endVerse > 0) {
+                result.endVerse = endVerse;
+            } else {
+                result.endVerse = null;
+            }
+        }
+    }
 
     if (isNaN(result.chapter) || result.chapter <= 0) { console.warn('[SVP_WARN] Invalid chapter', result); return null; }
     if (isNaN(result.startVerse) || result.startVerse <= 0) { result.startVerse = 1; }
@@ -537,13 +571,30 @@ async function handleTextSelectionEvent(event) {
     }, 200);
 }
 
-try {
-    console.log('[PSI-FIXED_DEBUG] content.js: Adding debounced mouseup listener.');
-    // Create the debounced version of our handler
-    const debouncedHandler = debounce(handleTextSelectionEvent, SELECTION_DEBOUNCE_MS);
-    document.addEventListener('mouseup', debouncedHandler);
-    console.log('[PSI-FIXED_DEBUG] content.js: Debounced mouseup listener ADDED.');
+const isBrowserEnvironment = typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function';
 
+if (isBrowserEnvironment) {
+    try {
+        console.log('[PSI-FIXED_DEBUG] content.js: Adding debounced mouseup listener.');
+        // Create the debounced version of our handler
+        const debouncedHandler = debounce(handleTextSelectionEvent, SELECTION_DEBOUNCE_MS);
+        document.addEventListener('mouseup', debouncedHandler);
+        console.log('[PSI-FIXED_DEBUG] content.js: Debounced mouseup listener ADDED.');
+
+    } catch (e) {
+        console.error('[PSI_STABLE_DEBUG] content.js: CRITICAL GLOBAL ERROR (listener setup):', e, e.stack);
+    }
+} else {
+    console.log('[PSI_DEBUG] content.js: Skipping DOM event listener registration (non-browser environment).');
+}
+
+const canListenForRuntimeMessages =
+    typeof chrome !== 'undefined' &&
+    chrome.runtime &&
+    chrome.runtime.onMessage &&
+    typeof chrome.runtime.onMessage.addListener === 'function';
+
+if (canListenForRuntimeMessages) {
     console.log('[PSI_DEBUG] content.js: Adding onMessage listener.');
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('[PSI_DEBUG] content.js: onMessage received:', request);
@@ -554,10 +605,10 @@ try {
         //             console.log('[PSI_DEBUG] content.js: ESV token from storage for getEsvApiKey:', items.esvToken ? 'Exists' : 'Not found');
         //             sendResponse({ esvApiKey: items.esvToken });
         //         });
-        //         return true; 
+        //         return true;
         //   } else {
         //         console.error("[PSI_DEBUG] content.js: chrome.storage.sync not available.");
-        //         sendResponse({ esvApiKey: null, error: "Storage API unavailable." }); 
+        //         sendResponse({ esvApiKey: null, error: "Storage API unavailable." });
         //         return false;
         //     }
         // }
@@ -565,7 +616,22 @@ try {
         return false; // Indicate that sendResponse will not be called asynchronously for other messages.
     });
     console.log('[PSI_DEBUG] content.js: onMessage listener ADDED.');
-} catch (e) {
-    console.error('[PSI_STABLE_DEBUG] content.js: CRITICAL GLOBAL ERROR (listener setup):', e, e.stack);
+} else {
+    console.log('[PSI_DEBUG] content.js: chrome.runtime.onMessage not available; listener not registered.');
 }
+
 console.log('[PSI_STABLE_DEBUG] content.js: Script end.');
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        parseReference,
+        bookMap,
+        escapeRegExp,
+        levenshteinDistance,
+        ensureBiblesData,
+        debounce,
+        SINGLE_CHAPTER_BOOKS,
+        handleTextSelectionEvent,
+        removePopup
+    };
+}
