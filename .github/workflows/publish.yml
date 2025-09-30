@@ -50,9 +50,35 @@ jobs:
 
       - name: Create ZIP file
         run: |
-          # Zip files from the root of the repository
-          # Exclude .git directory/files, .DS_Store, and any accidental Downloads folder from the zip
-          zip -r extension.zip . -x ".git*" "*.DS_Store" "Downloads/*" 
+          set -euo pipefail
+
+          # Explicitly package only the extension assets required by the Chrome Web Store
+          rm -f extension.zip
+
+          FILES=(
+            manifest.json
+            browserActionPopup.js
+            content.js
+            injectedPopup.js
+            options.html
+            options.js
+            popup.html
+            privacy.html
+            bibles.json
+            icon_16.png
+            icon_48.png
+            icon_128.png
+            new.png
+          )
+
+          for file in "${FILES[@]}"; do
+            if [ ! -e "$file" ]; then
+              echo "Required file '$file' is missing from the repository." >&2
+              exit 1
+            fi
+          done
+
+          zip -r extension.zip "${FILES[@]}"
         shell: bash
 
       - name: Upload to Chrome Web Store
