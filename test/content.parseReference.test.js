@@ -161,3 +161,45 @@ test('returns null when no numeric detail is present', () => {
   assert.equal(parseReference('In the beginning'), null);
 });
 
+test('parses verse range with non-breaking hyphen U+2011', () => {
+  const { parseReference } = loadContentModule();
+  const result = parseReference('2 Cor 7:5\u20116');
+  assert.ok(result, 'Should parse reference with non-breaking hyphen');
+  assert.equal(result.book, '2 Corinthians');
+  assert.equal(result.chapter, 7);
+  assert.equal(result.startVerse, 5);
+  assert.equal(result.endVerse, 6);
+});
+
+test('parses verse range with figure dash U+2012', () => {
+  const { parseReference } = loadContentModule();
+  const result = parseReference('Matthew 5:23\u20122\u00344');
+  // U+2012 is figure dash — should be normalized to regular hyphen
+  const result2 = parseReference('Matthew 5:23\u201224');
+  assert.ok(result2, 'Should parse reference with figure dash');
+  assert.equal(result2.book, 'Matthew');
+  assert.equal(result2.chapter, 5);
+  assert.equal(result2.startVerse, 23);
+  assert.equal(result2.endVerse, 24);
+});
+
+test('parses verse range with minus sign U+2212', () => {
+  const { parseReference } = loadContentModule();
+  const result = parseReference('Rom 8:28\u221230');
+  assert.ok(result, 'Should parse reference with minus sign');
+  assert.equal(result.book, 'Romans');
+  assert.equal(result.chapter, 8);
+  assert.equal(result.startVerse, 28);
+  assert.equal(result.endVerse, 30);
+});
+
+test('parses verse range with fullwidth hyphen U+FF0D', () => {
+  const { parseReference } = loadContentModule();
+  const result = parseReference('John 3:16\uFF0D18');
+  assert.ok(result, 'Should parse reference with fullwidth hyphen');
+  assert.equal(result.book, 'John');
+  assert.equal(result.chapter, 3);
+  assert.equal(result.startVerse, 16);
+  assert.equal(result.endVerse, 18);
+});
+

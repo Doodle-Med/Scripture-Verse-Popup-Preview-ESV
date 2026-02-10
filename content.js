@@ -205,7 +205,12 @@ function parseReference(text) {
     if (!text || typeof text !== 'string' || text.length < 2) return null;
 
     const originalText = text;
-    let normalizedText = text.replace(/[\u2013\u2014]/g, '-').replace(/\s+/g, ' ').trim();
+    // Normalize ALL dash-like Unicode characters to a plain hyphen-minus (U+002D)
+    // U+2010 hyphen, U+2011 non-breaking hyphen, U+2012 figure dash,
+    // U+2013 en dash, U+2014 em dash, U+2015 horizontal bar,
+    // U+2212 minus sign, U+FE58 small em dash, U+FE63 small hyphen-minus,
+    // U+FF0D fullwidth hyphen-minus
+    let normalizedText = text.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-').replace(/\s+/g, ' ').trim();
     normalizedText = normalizedText
         .replace(/^[\s"'\u2018\u2019\u201C\u201D.([{\\]+|[\s"'\u2018\u2019\u201C\u201D):.!?{}\\\]]+$/g, '')
         .trim();
