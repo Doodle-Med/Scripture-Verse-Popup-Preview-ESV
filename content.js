@@ -518,27 +518,55 @@ async function fetchVerses(refDetails, translationCode, currentBiblesData, userK
             case 'helloao': {
                 if (!osisBook) throw new Error(`OSIS book code not found for: ${book}`);
                 const helloaoId = translationInfo.helloaoId;
+                // Check OT-only / NT-only translations vs book testament
+                const otBooks = new Set(["Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth","1 Samuel","2 Samuel","1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther","Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi"]);
+                const isOT = otBooks.has(book);
+                if (helloaoId === 'HBOMAS' && !isOT) throw new Error(`Hebrew Masoretic OT does not contain New Testament books. Try a Greek or English translation for ${book}.`);
+                if ((helloaoId === 'grcsbl' || helloaoId === 'grcmt') && isOT) throw new Error(`Greek NT does not contain Old Testament books. Try the Hebrew Masoretic OT or an English translation for ${book}.`);
                 const finalEndChap = endChapter || startChapter;
                 let haoHtmlParts = [];
+                // Helper: recursively extract text from HelloAO content arrays
+                // Content items can be plain strings OR objects like {text:"...", wordsOfJesus:true}
+                function extractText(contentArr) {
+                    if (!contentArr) return '';
+                    return contentArr.map(c => {
+                        if (typeof c === 'string') return c;
+                        if (c && typeof c === 'object') {
+                            if (typeof c.text === 'string') return c.text;
+                            if (Array.isArray(c.content)) return extractText(c.content);
+                        }
+                        return '';
+                    }).join('');
+                }
                 for (let ch = startChapter; ch <= finalEndChap; ch++) {
                     url = `${API_BASE_URLS.HELLOAO}${helloaoId}/${osisBook}/${ch}.json`;
                     const haoResp = await fetchWithTimeout(url);
-                    const haoData = await haoResp.json();
+                    const haoText = await haoResp.text();
+                    let haoData;
+                    try { haoData = JSON.parse(haoText); }
+                    catch (jsonErr) {
+                        // Some HelloAO responses have trailing characters after valid JSON — try trimming
+                        const lastBrace = haoText.lastIndexOf('}');
+                        if (lastBrace > 0) {
+                            try { haoData = JSON.parse(haoText.substring(0, lastBrace + 1)); }
+                            catch { throw new Error(`Failed to parse response for ${book} ch.${ch}. The server returned invalid data.`); }
+                        } else {
+                            throw new Error(`Failed to parse response for ${book} ch.${ch}. The server returned invalid data.`);
+                        }
+                    }
                     const chContent = haoData.chapter ? haoData.chapter.content : null;
                     if (!chContent) throw new Error('Chapter data not found');
-                    // Determine verse range for this chapter
                     const vStart = (ch === startChapter) ? startVerse : 1;
                     const vEnd = (ch === finalEndChap && endVerse !== null) ? endVerse : 999;
                     let chHtml = '';
                     for (const item of chContent) {
                         if (item.type !== 'verse') continue;
                         if (item.number < vStart || item.number > vEnd) continue;
-                        const txt = item.content.filter(c => typeof c === 'string').join('');
+                        const txt = extractText(item.content);
                         chHtml += `<sup>${item.number}</sup>${txt.trim()} `;
                     }
                     if (ch !== startChapter && chHtml) chHtml = `<h3 style="font-size:0.9em;margin:8px 0 4px;">Chapter ${ch}</h3>` + chHtml;
                     haoHtmlParts.push(chHtml);
-                    // Store audio links from the primary chapter
                     if (ch === startChapter && haoData.thisChapterAudioLinks) {
                         currentAudioLinks = haoData.thisChapterAudioLinks;
                     }
@@ -563,7 +591,15 @@ async function fetchVerses(refDetails, translationCode, currentBiblesData, userK
                         if (!words) continue;
                         chHtml += `<div class="svp-il-verse"><sup>${v}</sup> `;
                         for (const w of words) {
-                            chHtml += `<span class="svp-il-word" title="${w.number}"><span class="svp-il-eng">${w.text}</span><br><span class="svp-il-num">${w.number}</span></span> `;
+                            // Strong's number links: g = Greek (biblehub.com/greek/N.htm), h = Hebrew
+                            const num = w.number || '';
+                            const numDigits = num.replace(/[^0-9]/g, '');
+                            const lang = num.startsWith('h') ? 'hebrew' : 'greek';
+                            const href = numDigits ? `https://biblehub.com/${lang}/${numDigits}.htm` : '';
+                            const numHtml = href
+                                ? `<a href="${href}" target="_blank" rel="noopener" class="svp-il-num">${num}</a>`
+                                : `<span class="svp-il-num">${num}</span>`;
+                            chHtml += `<span class="svp-il-word" title="${num}"><span class="svp-il-eng">${w.text}</span><br>${numHtml}</span> `;
                         }
                         chHtml += '</div>';
                     }
@@ -699,7 +735,8 @@ function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyB
             fontWeight: '500', color: fg
         }));
         contentDivEl.querySelectorAll('.svp-il-num').forEach(el => Object.assign(el.style, {
-            fontSize: '0.7em', color: isDark ? '#7a8baa' : '#6b7fa0', fontFamily: 'monospace'
+            fontSize: '0.7em', color: isDark ? '#7eb8ff' : '#1a5fb4', fontFamily: 'monospace',
+            textDecoration: 'underline', cursor: 'pointer'
         }));
     }
     popupEl.querySelectorAll('em:not(.svp-error-message)').forEach(em => { em.style.color = emColor; });
@@ -1079,7 +1116,7 @@ async function handleTextSelectionEvent(event) {
 
     // ── HelloAO Chapter Audio handler (professional MP3 narration) ──
     let activeAudioEl = null;
-    audioButton.addEventListener('click', (e) => {
+    audioButton.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (activeAudioEl && !activeAudioEl.paused) {
             activeAudioEl.pause();
@@ -1091,13 +1128,21 @@ async function handleTextSelectionEvent(event) {
         // Pick first available audio URL
         const audioUrl = Object.values(currentAudioLinks)[0];
         if (!audioUrl) return;
-        activeAudioEl = new Audio(audioUrl);
-        activeAudioEl.play().then(() => {
+        audioButton.textContent = '\u23F3 Loading...';
+        try {
+            // Fetch via extension permissions to bypass page CSP, then create blob URL
+            const resp = await fetch(audioUrl);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const blob = await resp.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            activeAudioEl = new Audio(blobUrl);
+            activeAudioEl.onended = () => { audioButton.textContent = '\u{1F3A7} Audio'; activeAudioEl = null; URL.revokeObjectURL(blobUrl); };
+            await activeAudioEl.play();
             audioButton.textContent = '\u23F9 Stop';
-        }).catch(() => {
+        } catch (err) {
+            console.warn('[SVP] Audio playback failed:', err);
             audioButton.textContent = '\u{1F3A7} Audio';
-        });
-        activeAudioEl.onended = () => { audioButton.textContent = '\u{1F3A7} Audio'; activeAudioEl = null; };
+        }
     });
     audioButton.addEventListener('mousedown', e => e.stopPropagation());
 

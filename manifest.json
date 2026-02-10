@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scripture Verse Popup Preview ESV",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Verse preview on select. Copy to clipboard; open on Bible Gateway. Multi-translation. Privacy focused.",
   "icons": {
     "16":  "icon_16.png",
