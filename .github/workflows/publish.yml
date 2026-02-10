@@ -10,17 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3 # Using v3 for broader compatibility, adjust if needed
-        with:
-          node-version: '18' 
-
-      - name: Install dependencies
-        run: |
-          echo "Installing project dependencies..."
-          npm install
+        uses: actions/checkout@v4
 
       - name: Bump Version in manifest.json
         id: bump_version
@@ -50,20 +40,30 @@ jobs:
 
       - name: Create ZIP file
         run: |
-          # Zip files from the root of the repository
-          # Exclude .git directory/files, .DS_Store, and any accidental Downloads folder from the zip
-          zip -r extension.zip . -x ".git*" "*.DS_Store" "Downloads/*" 
+          # Package only extension files. Including node_modules/test/etc causes 400 from Chrome Web Store API.
+          zip -r extension.zip . \
+            -x ".git*" \
+            -x ".github/*" \
+            -x "node_modules/*" \
+            -x "test/*" \
+            -x "*.DS_Store" \
+            -x "package.json" \
+            -x "package-lock.json" \
+            -x "*.md" \
+            -x ".gitignore" \
+            -x "Downloads/*"
+          echo "ZIP size: $(du -h extension.zip | cut -f1)"
         shell: bash
 
       - name: Upload to Chrome Web Store
-        uses: mnao305/chrome-extension-upload@v4.0.1 # You confirmed this action
+        uses: mnao305/chrome-extension-upload@v5.0.0
         with:
-          file-path: extension.zip 
+          file-path: extension.zip
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
           client-id: ${{ secrets.CHROME_CLIENT_ID }}
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          # publish: true # Uncomment to publish immediately
+          publish: false
 
       - name: Commit and Push Version Bump
         run: |
