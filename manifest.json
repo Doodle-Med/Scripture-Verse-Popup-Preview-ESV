@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scripture Verse Popup Preview ESV",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Verse preview on select. Copy to clipboard; open on Bible Gateway. Multi-translation. Privacy focused.",
   "icons": {
     "16":  "icon_16.png",
@@ -14,7 +14,9 @@
     "https://cdn.jsdelivr.net/*",
     "https://raw.githubusercontent.com/*",
     "https://api.scripture.api.bible/*",
-    "https://bible-api.com/*"
+    "https://bible-api.com/*",
+    "https://bible.helloao.org/*",
+    "https://openbible.com/*"
   ],
   "background": {
     "service_worker": "background.js"

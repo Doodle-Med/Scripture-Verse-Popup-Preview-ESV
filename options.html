@@ -63,6 +63,14 @@
   <input id="bibleApiKeyInput" type="password" placeholder="Enter your api.bible key" autocomplete="off">
   <p class="info">Overrides the built-in default. Needed for Browse &amp; custom translations. Get from <a href="https://scripture.api.bible/" target="_blank">scripture.api.bible</a>.</p>
 
+  <label for="translationCategory">Translation Filter (shown in popup)</label>
+  <select id="translationCategory">
+    <option value="main">Main (ESV, KJV, BSB, WEB, ASV, Greek, Hebrew, Interlinear)</option>
+    <option value="english">English Only</option>
+    <option value="ancient">Ancient Languages (Greek, Hebrew, Interlinear)</option>
+    <option value="all">Show All Translations</option>
+  </select>
+
   <label for="defaultTranslationSelect">Default Translation</label>
   <select id="defaultTranslationSelect"></select>
 

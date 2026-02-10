@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         POPUP_FONT_SIZE: 'popupFontSize',
         POPUP_THEME: 'popupTheme',
         POPUP_MAX_WIDTH: 'popupMaxWidth',
+        TRANSLATION_CATEGORY: 'translationCategory',
     };
 
     // ── DOM refs ──
@@ -18,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         fontSize: document.getElementById('popupFontSize'),
         theme: document.getElementById('popupTheme'),
         maxWidth: document.getElementById('popupMaxWidth'),
+        category: document.getElementById('translationCategory'),
         saveBtn: document.getElementById('saveOptionsButton'),
         status: document.getElementById('statusMessage'),
         browseBtn: document.getElementById('browseBiblesBtn'),
@@ -105,6 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 [SK.POPUP_FONT_SIZE]: '14',
                 [SK.POPUP_THEME]: 'auto',
                 [SK.POPUP_MAX_WIDTH]: '520',
+                [SK.TRANSLATION_CATEGORY]: 'main',
             }, resolve);
         });
         els.esvKey.value = items[SK.ESV_KEY] || '';
@@ -113,6 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (els.fontSize) els.fontSize.value = items[SK.POPUP_FONT_SIZE] || '14';
         if (els.theme) els.theme.value = items[SK.POPUP_THEME] || 'auto';
         if (els.maxWidth) els.maxWidth.value = items[SK.POPUP_MAX_WIDTH] || '520';
+        if (els.category) els.category.value = items[SK.TRANSLATION_CATEGORY] || 'main';
 
         populateDropdown();
         const saved = items[SK.DEFAULT_TRANS];
@@ -132,6 +136,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             [SK.POPUP_FONT_SIZE]: els.fontSize.value,
             [SK.POPUP_THEME]: els.theme.value,
             [SK.POPUP_MAX_WIDTH]: els.maxWidth.value,
+            [SK.TRANSLATION_CATEGORY]: els.category.value,
         }, () => {
             if (chrome.runtime.lastError) {
                 showStatus(els.status, 'Error: ' + chrome.runtime.lastError.message, 'red', 3000);

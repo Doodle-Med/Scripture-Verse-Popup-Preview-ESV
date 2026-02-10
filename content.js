@@ -13,8 +13,10 @@ const STORAGE_KEY_CUSTOM_TRANSLATIONS = 'customTranslations';
 const STORAGE_KEY_POPUP_FONT_SIZE = 'popupFontSize';
 const STORAGE_KEY_POPUP_THEME = 'popupTheme';
 const STORAGE_KEY_POPUP_MAX_WIDTH = 'popupMaxWidth';
+const STORAGE_KEY_TRANSLATION_CATEGORY = 'translationCategory';
 
 let popup = null;
+let currentAudioLinks = null; // HelloAO chapter audio MP3 links
 let currentSelectionRefs = null;
 
 // ──────────────────────────────────────────────
@@ -119,7 +121,32 @@ const API_BASE_URLS = {
     ESV: 'https://api.esv.org/v3/passage/text/',
     SCRIPTURE_BIBLE: 'https://api.scripture.api.bible/v1/bibles/',
     BIBLE_API_COM: 'https://bible-api.com/',
-    CDN: 'https://raw.githubusercontent.com/wldeh/bible-api/main/bibles/'
+    CDN: 'https://raw.githubusercontent.com/wldeh/bible-api/main/bibles/',
+    HELLOAO: 'https://bible.helloao.org/api/',
+    INTERLINEAR: 'https://raw.githubusercontent.com/tahmmee/interlinear_bibledata/master/src/'
+};
+
+// Map canonical book names → tahmmee interlinear repo folder names
+const interlinearBookMap = {
+    "Genesis":"genesis","Exodus":"exodus","Leviticus":"leviticus","Numbers":"numbers",
+    "Deuteronomy":"deuteronomy","Joshua":"joshua","Judges":"judges","Ruth":"ruth",
+    "1 Samuel":"i_samuel","2 Samuel":"ii_samuel","1 Kings":"i_kings","2 Kings":"ii_kings",
+    "1 Chronicles":"i_chronicles","2 Chronicles":"ii_chronicles","Ezra":"ezra",
+    "Nehemiah":"nehemiah","Esther":"esther","Job":"job","Psalms":"psalms",
+    "Proverbs":"proverbs","Ecclesiastes":"ecclesiastes","Song of Solomon":"song_of_solomon",
+    "Isaiah":"isaiah","Jeremiah":"jeremiah","Lamentations":"lamentations",
+    "Ezekiel":"ezekiel","Daniel":"daniel","Hosea":"hosea","Joel":"joel","Amos":"amos",
+    "Obadiah":"obadiah","Jonah":"jonah","Micah":"micah","Nahum":"nahum",
+    "Habakkuk":"habakkuk","Zephaniah":"zephaniah","Haggai":"haggai",
+    "Zechariah":"zechariah","Malachi":"malachi","Matthew":"matthew","Mark":"mark",
+    "Luke":"luke","John":"john","Acts":"acts","Romans":"romans",
+    "1 Corinthians":"i_corinthians","2 Corinthians":"ii_corinthians",
+    "Galatians":"galatians","Ephesians":"ephesians","Philippians":"philippians",
+    "Colossians":"colossians","1 Thessalonians":"i_thessalonians",
+    "2 Thessalonians":"ii_thessalonians","1 Timothy":"i_timothy","2 Timothy":"ii_timothy",
+    "Titus":"titus","Philemon":"philemon","Hebrews":"hebrews","James":"james",
+    "1 Peter":"i_peter","2 Peter":"ii_peter","1 John":"i_john","2 John":"ii_john",
+    "3 John":"iii_john","Jude":"jude","Revelation":"revelation"
 };
 
 const osisBookMap = {
@@ -404,6 +431,7 @@ async function fetchVerses(refDetails, translationCode, currentBiblesData, userK
         apiKeyForCall = userKeys.bibleApiKey;
     }
 
+    // HelloAO and interlinear_strongs need no API keys at all
     const keyRequiredApiTypes = ['esv.org', 'esv_org', 'scripture_api_bible'];
     if (keyRequiredApiTypes.includes(currentApiType) && (!apiKeyForCall || apiKeyForCall.includes('_PLACEHOLDER__'))) {
         const errorLink = optionsPageUrl && optionsPageUrl.startsWith('chrome-extension://')
@@ -480,6 +508,63 @@ async function fetchVerses(refDetails, translationCode, currentBiblesData, userK
                 }
                 fetchedPassageHtml = cdnHtmlSegments.join('');
                 if (!fetchedPassageHtml) fetchedPassageHtml = '<em class="svp-error-message">Could not load passage from CDN.</em>';
+                break;
+            }
+            case 'helloao': {
+                if (!osisBook) throw new Error(`OSIS book code not found for: ${book}`);
+                const helloaoId = translationInfo.helloaoId;
+                const finalEndChap = endChapter || startChapter;
+                let haoHtmlParts = [];
+                for (let ch = startChapter; ch <= finalEndChap; ch++) {
+                    url = `${API_BASE_URLS.HELLOAO}${helloaoId}/${osisBook}/${ch}.json`;
+                    const haoResp = await fetchWithTimeout(url);
+                    const haoData = await haoResp.json();
+                    const chContent = haoData.chapter ? haoData.chapter.content : null;
+                    if (!chContent) throw new Error('Chapter data not found');
+                    // Determine verse range for this chapter
+                    const vStart = (ch === startChapter) ? startVerse : 1;
+                    const vEnd = (ch === finalEndChap && endVerse !== null) ? endVerse : 999;
+                    let chHtml = '';
+                    for (const item of chContent) {
+                        if (item.type !== 'verse') continue;
+                        if (item.number < vStart || item.number > vEnd) continue;
+                        const txt = item.content.filter(c => typeof c === 'string').join('');
+                        chHtml += `<sup>${item.number}</sup>${txt.trim()} `;
+                    }
+                    if (ch !== startChapter && chHtml) chHtml = `<h3 style="font-size:0.9em;margin:8px 0 4px;">Chapter ${ch}</h3>` + chHtml;
+                    haoHtmlParts.push(chHtml);
+                    // Store audio links from the primary chapter
+                    if (ch === startChapter && haoData.thisChapterAudioLinks) {
+                        currentAudioLinks = haoData.thisChapterAudioLinks;
+                    }
+                }
+                fetchedPassageHtml = `<span class="svp-passage-text">${haoHtmlParts.join('').trim()}</span>`;
+                break;
+            }
+            case 'interlinear_strongs': {
+                const ilBookName = interlinearBookMap[book];
+                if (!ilBookName) throw new Error(`Interlinear data not available for: ${book}`);
+                const finalIlEndChap = endChapter || startChapter;
+                let ilHtmlParts = [];
+                for (let ch = startChapter; ch <= finalIlEndChap; ch++) {
+                    url = `${API_BASE_URLS.INTERLINEAR}${ilBookName}/${ch}.json`;
+                    const ilResp = await fetchWithTimeout(url);
+                    const ilData = await ilResp.json();
+                    const vStart = (ch === startChapter) ? startVerse : 1;
+                    const vEnd = (ch === finalIlEndChap && endVerse !== null) ? endVerse : Math.max(...Object.keys(ilData).map(Number));
+                    let chHtml = '';
+                    for (let v = vStart; v <= vEnd; v++) {
+                        const words = ilData[String(v)];
+                        if (!words) continue;
+                        chHtml += `<div class="svp-il-verse"><sup>${v}</sup> `;
+                        for (const w of words) {
+                            chHtml += `<span class="svp-il-word" title="${w.number}"><span class="svp-il-eng">${w.text}</span><br><span class="svp-il-num">${w.number}</span></span> `;
+                        }
+                        chHtml += '</div>';
+                    }
+                    ilHtmlParts.push(chHtml);
+                }
+                fetchedPassageHtml = `<span class="svp-passage-text svp-interlinear">${ilHtmlParts.join('').trim()}</span>`;
                 break;
             }
             case 'scripture_api_bible': {
@@ -596,9 +681,35 @@ function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyB
             borderBottom: isDark ? '1px solid #4a4a4a' : '1px solid #dadce0', paddingBottom: '5px'
         }));
         contentDivEl.querySelectorAll('hr').forEach(hr => Object.assign(hr.style, { margin: '18px 0', border: '0', height: '1px', background: isDark ? '#4a4a4a' : '#dadce0' }));
+        // Interlinear styling
+        contentDivEl.querySelectorAll('.svp-il-verse').forEach(el => Object.assign(el.style, {
+            marginBottom: '10px', lineHeight: '2.2', display: 'flex', flexWrap: 'wrap', gap: '2px', alignItems: 'flex-start'
+        }));
+        contentDivEl.querySelectorAll('.svp-il-word').forEach(el => Object.assign(el.style, {
+            display: 'inline-flex', flexDirection: 'column', alignItems: 'center', padding: '2px 5px',
+            borderRadius: '4px', background: isDark ? '#383b40' : '#f0f4ff', margin: '1px',
+            fontSize: fontSize, lineHeight: '1.3', cursor: 'default'
+        }));
+        contentDivEl.querySelectorAll('.svp-il-eng').forEach(el => Object.assign(el.style, {
+            fontWeight: '500', color: fg
+        }));
+        contentDivEl.querySelectorAll('.svp-il-num').forEach(el => Object.assign(el.style, {
+            fontSize: '0.7em', color: isDark ? '#7a8baa' : '#6b7fa0', fontFamily: 'monospace'
+        }));
     }
     popupEl.querySelectorAll('em:not(.svp-error-message)').forEach(em => { em.style.color = emColor; });
     popupEl.querySelectorAll('strong:not(.svp-reference-title)').forEach(s => { s.style.color = hdrColor; });
+    // Style audio button if present
+    const audioBtn = popupEl.querySelector('#svp-audio-button');
+    if (audioBtn) {
+        Object.assign(audioBtn.style, {
+            fontSize: '11px', fontWeight: '500', padding: '5px 10px', borderRadius: '4px',
+            cursor: 'pointer', marginLeft: '8px', opacity: '0.85',
+            background: isDark ? '#2d4a2d' : '#e6f4ea', color: isDark ? '#81c784' : '#1b5e20',
+            border: `1px solid ${isDark ? '#4a6b4a' : '#a5d6a7'}`,
+            transition: 'opacity 0.2s'
+        });
+    }
 }
 
 // ──────────────────────────────────────────────
@@ -710,6 +821,7 @@ async function handleTextSelectionEvent(event) {
             [STORAGE_KEY_POPUP_FONT_SIZE]: '14',
             [STORAGE_KEY_POPUP_THEME]: 'auto',
             [STORAGE_KEY_POPUP_MAX_WIDTH]: '520',
+            [STORAGE_KEY_TRANSLATION_CATEGORY]: 'main',
         }, items => {
             if (chrome.runtime.lastError) {
                 resolve({});
@@ -733,6 +845,17 @@ async function handleTextSelectionEvent(event) {
     const customTrans = settings[STORAGE_KEY_CUSTOM_TRANSLATIONS] || {};
     if (Object.keys(customTrans).length > 0) {
         Object.assign(currentBiblesData, customTrans);
+    }
+
+    // Filter translations by category
+    const selectedCategory = settings[STORAGE_KEY_TRANSLATION_CATEGORY] || 'main';
+    if (selectedCategory !== 'all') {
+        for (const code of Object.keys(currentBiblesData)) {
+            const cats = currentBiblesData[code].categories;
+            if (cats && !cats.includes(selectedCategory)) {
+                delete currentBiblesData[code];
+            }
+        }
     }
 
     // ── Build popup DOM ──
@@ -777,6 +900,14 @@ async function handleTextSelectionEvent(event) {
     ttsButton.title = 'Read aloud (Text-to-Speech)';
     actionsContainer.appendChild(ttsButton);
 
+    // Audio button (appears when HelloAO chapter audio is available)
+    const audioButton = document.createElement('button');
+    audioButton.id = 'svp-audio-button';
+    audioButton.textContent = '\u{1F3A7} Audio';
+    audioButton.title = 'Play chapter audio (professional narration)';
+    audioButton.style.display = 'none'; // hidden until audio links are available
+    actionsContainer.appendChild(audioButton);
+
     popup.appendChild(actionsContainer);
 
     // Content area
@@ -819,6 +950,9 @@ async function handleTextSelectionEvent(event) {
         const transName = transInfo ? (transInfo.displayName || transInfo.display || translationCode.toUpperCase()) : translationCode.toUpperCase();
         const loadingColor = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? '#a0a0a0' : '#5a5a5a';
 
+        currentAudioLinks = null; // Reset audio links for new translation
+        audioButton.style.display = 'none';
+
         let loadingMsg = refs.length === 1 ? `Loading ${buildRefDisplayString(refs[0])}...` : `Loading ${refs.length} references...`;
         contentDiv.innerHTML = `<em style="color: ${loadingColor}; font-style: italic;">${loadingMsg} (${transName})</em>`;
         applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv, appearanceOpts);
@@ -829,6 +963,12 @@ async function handleTextSelectionEvent(event) {
             combinedHtml += await fetchVerses(refs[i], translationCode, currentBiblesData, userKeys, optionsPageUrl);
         }
         contentDiv.innerHTML = combinedHtml;
+
+        // Show audio button if HelloAO chapter audio links are available
+        if (currentAudioLinks && Object.keys(currentAudioLinks).length > 0) {
+            audioButton.style.display = '';
+        }
+
         applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv, appearanceOpts);
         adjustPopupPosition(popup, selectionRect);
     }
@@ -931,6 +1071,30 @@ async function handleTextSelectionEvent(event) {
         window.speechSynthesis.speak(utterance);
     });
     ttsButton.addEventListener('mousedown', e => e.stopPropagation());
+
+    // ── HelloAO Chapter Audio handler (professional MP3 narration) ──
+    let activeAudioEl = null;
+    audioButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (activeAudioEl && !activeAudioEl.paused) {
+            activeAudioEl.pause();
+            activeAudioEl = null;
+            audioButton.textContent = '\u{1F3A7} Audio';
+            return;
+        }
+        if (!currentAudioLinks) return;
+        // Pick first available audio URL
+        const audioUrl = Object.values(currentAudioLinks)[0];
+        if (!audioUrl) return;
+        activeAudioEl = new Audio(audioUrl);
+        activeAudioEl.play().then(() => {
+            audioButton.textContent = '\u23F9 Stop';
+        }).catch(() => {
+            audioButton.textContent = '\u{1F3A7} Audio';
+        });
+        activeAudioEl.onended = () => { audioButton.textContent = '\u{1F3A7} Audio'; activeAudioEl = null; };
+    });
+    audioButton.addEventListener('mousedown', e => e.stopPropagation());
 
     // ── Prevent interactions inside popup from dismissing it ──
 

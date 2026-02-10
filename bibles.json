@@ -2,24 +2,55 @@
   "esv": {
     "displayName": "ESV (English Standard Version)",
     "apiType": "esv_org",
-    "apiKey": "__ESV_API_KEY_PLACEHOLDER__"
+    "apiKey": "__ESV_API_KEY_PLACEHOLDER__",
+    "categories": ["main", "english"]
   },
   "kjv": {
     "displayName": "KJV (King James Version)",
-    "apiType": "bible-api.com",
-    "api_id": "kjv",
-    "apiKey": null
+    "apiType": "helloao",
+    "helloaoId": "eng-kjv",
+    "categories": ["main", "english"]
   },
-  "asv": {
-    "displayName": "ASV (American Standard Version)",
-    "apiType": "bible-api.com",
-    "api_id": "asv",
-    "apiKey": null
+  "bsb": {
+    "displayName": "BSB (Berean Standard Bible)",
+    "apiType": "helloao",
+    "helloaoId": "BSB",
+    "categories": ["main", "english"],
+    "hasAudio": true
   },
   "web": {
     "displayName": "WEB (World English Bible)",
-    "apiType": "bible-api.com",
-    "api_id": "web",
-    "apiKey": null
+    "apiType": "helloao",
+    "helloaoId": "ENGWEBP",
+    "categories": ["main", "english"]
+  },
+  "asv": {
+    "displayName": "ASV (American Standard Version)",
+    "apiType": "helloao",
+    "helloaoId": "eng-asv",
+    "categories": ["main", "english"]
+  },
+  "interlinear": {
+    "displayName": "Interlinear (Strong's Concordance)",
+    "apiType": "interlinear_strongs",
+    "categories": ["main", "ancient"]
+  },
+  "greek-sbl": {
+    "displayName": "Greek NT — SBL",
+    "apiType": "helloao",
+    "helloaoId": "grcsbl",
+    "categories": ["main", "ancient"]
+  },
+  "greek-byz": {
+    "displayName": "Greek NT — Byzantine/Majority",
+    "apiType": "helloao",
+    "helloaoId": "grcmt",
+    "categories": ["ancient"]
+  },
+  "hebrew-ot": {
+    "displayName": "Hebrew Masoretic OT",
+    "apiType": "helloao",
+    "helloaoId": "HBOMAS",
+    "categories": ["main", "ancient"]
   }
 }
