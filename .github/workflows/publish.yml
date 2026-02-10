@@ -38,6 +38,28 @@ jobs:
           echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
         shell: bash
 
+      - name: Inject default API keys (GitHub Secrets → placeholders)
+        run: |
+          # Replace placeholder API keys with real keys from GitHub Secrets
+          # so the published extension works out of the box for end users.
+          # Source code on GitHub never contains the real keys.
+          if [ -n "$ESV_API_KEY" ]; then
+            sed -i "s|__ESV_API_KEY_PLACEHOLDER__|${ESV_API_KEY}|g" bibles.json
+            echo "✓ ESV API key injected"
+          else
+            echo "⚠ ESV_API_KEY secret not set — users will need to provide their own"
+          fi
+          if [ -n "$BIBLE_API_KEY" ]; then
+            sed -i "s|__BIBLE_API_KEY_PLACEHOLDER__|${BIBLE_API_KEY}|g" bibles.json
+            echo "✓ api.bible key injected"
+          else
+            echo "⚠ BIBLE_API_KEY secret not set — users will need to provide their own"
+          fi
+        env:
+          ESV_API_KEY: ${{ secrets.ESV_API_KEY }}
+          BIBLE_API_KEY: ${{ secrets.BIBLE_API_KEY }}
+        shell: bash
+
       - name: Create ZIP file
         run: |
           # Package only extension files. Including node_modules/test/etc causes 400 from Chrome Web Store API.

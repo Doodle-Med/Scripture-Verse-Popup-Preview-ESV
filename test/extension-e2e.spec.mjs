@@ -212,7 +212,7 @@ async function runTests() {
         await saveBtn.click();
         await optionsPage.waitForTimeout(600);
         const statusText = await optionsPage.locator('#statusMessage').textContent();
-        if (statusText && statusText.includes('Saved')) {
+        if (statusText && (statusText.includes('Saved') || statusText.includes('saved'))) {
           console.log('[PASS] Options page save works');
           passed++;
         } else {
@@ -270,6 +270,10 @@ async function runTests() {
       }
       if (await popupLocator.locator('#svp-link-button').isVisible()) {
         console.log('[PASS] Context button visible');
+        passed++;
+      }
+      if (await popupLocator.locator('#svp-tts-button').isVisible()) {
+        console.log('[PASS] Read Aloud (TTS) button visible');
         passed++;
       }
 

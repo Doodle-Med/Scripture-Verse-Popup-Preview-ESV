@@ -2,40 +2,139 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Extension Options</title>
+  <title>Scripture Popup Options</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 2em; color: #222; background: #fff; max-width: 400px; }
-    label { display: block; margin-top: 18px; font-weight: 600; }
-    input, select { width: 100%; padding: 8px; font: inherit; margin-top: 4px; border-radius: 6px; border: 1px solid #333; background: #fff; color: #222; }
-    button { font-weight: 600; cursor: pointer; margin-top: 18px; width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #333; background: #fff; color: #222; }
-    .info { font-size: 0.9em; color: #555; margin-top: 5px; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0 auto; padding: 2em; color: #222; background: #fff; max-width: 620px; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-top: 0; }
+    h3 { font-size: 1.1em; margin-top: 28px; margin-bottom: 8px; color: #444; }
+    label { display: block; margin-top: 14px; font-weight: 600; font-size: 0.95em; }
+    input[type=text], input[type=password], select {
+      width: 100%; padding: 8px 10px; font: inherit; margin-top: 4px;
+      border-radius: 6px; border: 1px solid #bbb; background: #fff; color: #222;
+    }
+    button {
+      font-weight: 600; cursor: pointer; padding: 8px 16px; border-radius: 6px;
+      border: 1px solid #bbb; background: #f5f5f5; color: #222; margin-top: 10px;
+    }
+    button:hover { background: #e8e8e8; }
+    button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    button.primary:hover { background: #1d4ed8; }
+    button.danger { background: #dc2626; color: #fff; border-color: #dc2626; font-size: 0.8em; padding: 4px 10px; }
+    button.danger:hover { background: #b91c1c; }
+    .info { font-size: 0.85em; color: #666; margin-top: 4px; }
+    .section { margin-top: 28px; padding-top: 18px; border-top: 1px solid #eee; }
+    .status { margin-top: 10px; font-size: 0.9em; min-height: 1.2em; }
+    #browseBiblesResults { max-height: 320px; overflow-y: auto; margin-top: 10px; font-size: 0.85em; }
+    #browseBiblesResults table { width: 100%; border-collapse: collapse; }
+    #browseBiblesResults th, #browseBiblesResults td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee; }
+    #browseBiblesResults th { background: #f8f8f8; position: sticky; top: 0; }
+    #browseBiblesResults button { margin: 0; padding: 3px 10px; font-size: 0.85em; }
+    #customTranslationsList { margin-top: 8px; }
+    .custom-tr-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.9em; }
+    .custom-tr-item .tr-name { flex: 1; }
+    .custom-tr-item .tr-lang { color: #888; font-size: 0.85em; margin-left: 8px; }
+    .row { display: flex; gap: 12px; align-items: flex-end; }
+    .row > * { flex: 1; }
     @media (prefers-color-scheme: dark) {
       body { color: #e0e0e0; background: #181a1b; }
-      input, select, button { background: #181a1b; color: #e0e0e0; border-color: #444; }
-      .info { color: #aaa; }
+      input, select, button { background: #232628; color: #e0e0e0; border-color: #444; }
+      button:hover { background: #333; }
+      button.primary { background: #3b82f6; border-color: #3b82f6; }
+      button.primary:hover { background: #2563eb; }
+      h3 { color: #bbb; }
+      .info { color: #999; }
+      .section { border-top-color: #333; }
+      h2 { border-bottom-color: #333; }
+      #browseBiblesResults th { background: #282a2c; }
+      #browseBiblesResults td { border-bottom-color: #333; }
     }
   </style>
 </head>
 <body>
   <h2>Scripture Popup Options</h2>
-  <p class="info" style="margin-bottom:12px;">If this page is blocked (e.g. by an ad blocker), use the extension popup instead: click the extension icon and set your API keys in the &quot;API keys&quot; section at the bottom.</p>
 
+  <!-- API Keys -->
   <label for="esvApiKeyInput">ESV API Token</label>
-  <input id="esvApiKeyInput" type="text" placeholder="Paste your ESV API token here">
-  <p class="info">This key is stored locally and only used when ESV translation is selected. Get from <a href="https://www.esv.org/account/api/" target="_blank" rel="noopener">esv.org</a>.</p>
-
-  <label for="defaultTranslationSelect">Default Translation for Popups</label>
-  <select id="defaultTranslationSelect">
-    <!-- Options will be populated by script -->
-  </select>
-  <p class="info">This sets the initial translation when a popup appears. Your last selection in a popup may override this for that session.</p>
+  <input id="esvApiKeyInput" type="password" placeholder="Paste your ESV API token here" autocomplete="off">
+  <p class="info">Stored locally. Overrides the built-in default key. Get from <a href="https://api.esv.org/" target="_blank">api.esv.org</a>.</p>
 
   <label for="bibleApiKeyInput">api.bible API Key</label>
-  <input id="bibleApiKeyInput" type="text" placeholder="Enter your api.bible Key">
-  <p class="info">Needed for NKJV, NASB etc. Get from <a href="https://scripture.api.bible/" target="_blank" rel="noopener">scripture.api.bible</a>.</p>
+  <input id="bibleApiKeyInput" type="password" placeholder="Enter your api.bible key" autocomplete="off">
+  <p class="info">Overrides the built-in default. Needed for Browse &amp; custom translations. Get from <a href="https://scripture.api.bible/" target="_blank">scripture.api.bible</a>.</p>
 
-  <button id="saveOptionsButton">Save Options</button>
-  <div id="statusMessage" style="margin-top:12px;font-size:14px; height: 1em;"></div>
+  <label for="defaultTranslationSelect">Default Translation</label>
+  <select id="defaultTranslationSelect"></select>
+
+  <!-- Popup Appearance -->
+  <div class="section">
+    <h3>Popup Appearance</h3>
+    <div class="row">
+      <div>
+        <label for="popupFontSize">Font Size</label>
+        <select id="popupFontSize">
+          <option value="12">Small (12px)</option>
+          <option value="14" selected>Medium (14px)</option>
+          <option value="16">Large (16px)</option>
+          <option value="18">X-Large (18px)</option>
+        </select>
+      </div>
+      <div>
+        <label for="popupTheme">Theme</label>
+        <select id="popupTheme">
+          <option value="auto" selected>Auto (system)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div>
+        <label for="popupMaxWidth">Max Width</label>
+        <select id="popupMaxWidth">
+          <option value="400">Narrow (400px)</option>
+          <option value="520" selected>Medium (520px)</option>
+          <option value="650">Wide (650px)</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <button id="saveOptionsButton" class="primary" style="width:100%; margin-top:20px;">Save All Settings</button>
+  <div id="statusMessage" class="status"></div>
+
+  <!-- Browse & Add api.bible Translations -->
+  <div class="section">
+    <h3>Browse &amp; Add api.bible Translations</h3>
+    <p class="info">Enter your api.bible key above, then click Browse to find translations (NASB, NKJV, Greek NT, Hebrew OT, etc.). Click "Add" to add any to your list.</p>
+    <div class="row">
+      <div>
+        <label for="browseLangFilter">Language filter</label>
+        <select id="browseLangFilter">
+          <option value="">All languages</option>
+          <option value="eng" selected>English</option>
+          <option value="grc">Greek</option>
+          <option value="heb">Hebrew</option>
+          <option value="spa">Spanish</option>
+          <option value="lat">Latin</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button id="browseBiblesBtn" style="width:100%;">Browse Available Bibles</button>
+      </div>
+    </div>
+    <div id="browseBiblesStatus" class="status"></div>
+    <div id="browseBiblesResults"></div>
+  </div>
+
+  <!-- Your Added Translations -->
+  <div class="section">
+    <h3>Your Added Translations</h3>
+    <p class="info">Translations you've added from api.bible. These appear alongside the built-in ones (ESV, KJV, ASV, WEB).</p>
+    <div id="customTranslationsList"></div>
+  </div>
+
   <script src="options.js"></script>
 </body>
-</html> 
+</html>

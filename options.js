@@ -1,110 +1,225 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("OptionsPage: DOMContentLoaded, script running.");
+    // ── Storage Keys (must match content.js / browserActionPopup.js) ──
+    const SK = {
+        ESV_KEY: 'userEsvApiKey',
+        BIBLE_KEY: 'userApiBibleApiKey',
+        DEFAULT_TRANS: 'userDefaultGlobalTranslation',
+        CUSTOM_TRANS: 'customTranslations',
+        POPUP_FONT_SIZE: 'popupFontSize',
+        POPUP_THEME: 'popupTheme',
+        POPUP_MAX_WIDTH: 'popupMaxWidth',
+    };
 
-    const defaultTranslationSelect = document.getElementById('defaultTranslationSelect');
-    const esvApiKeyInput = document.getElementById('esvApiKeyInput');
-    const bibleApiKeyInput = document.getElementById('bibleApiKeyInput');
-    const saveButton = document.getElementById('saveOptionsButton');
-    const statusMessage = document.getElementById('statusMessage');
+    // ── DOM refs ──
+    const els = {
+        esvKey: document.getElementById('esvApiKeyInput'),
+        bibleKey: document.getElementById('bibleApiKeyInput'),
+        defaultTrans: document.getElementById('defaultTranslationSelect'),
+        fontSize: document.getElementById('popupFontSize'),
+        theme: document.getElementById('popupTheme'),
+        maxWidth: document.getElementById('popupMaxWidth'),
+        saveBtn: document.getElementById('saveOptionsButton'),
+        status: document.getElementById('statusMessage'),
+        browseBtn: document.getElementById('browseBiblesBtn'),
+        browseLang: document.getElementById('browseLangFilter'),
+        browseStatus: document.getElementById('browseBiblesStatus'),
+        browseResults: document.getElementById('browseBiblesResults'),
+        customList: document.getElementById('customTranslationsList'),
+    };
 
-    // Consistent Storage Keys (Must match those used in other scripts)
-    const STORAGE_KEY_USER_DEFAULT_TRANSLATION = 'userDefaultGlobalTranslation';
-    const STORAGE_KEY_USER_ESV_API_KEY = 'userEsvApiKey';
-    const STORAGE_KEY_USER_BIBLE_API_KEY = 'userApiBibleApiKey';
+    let builtInBibles = {};
+    let customTranslations = {};
 
-    async function loadBiblesConfigAndPopulateDropdown() {
-        console.log("OptionsPage: Loading bibles.json for dropdown...");
+    // ── Helpers ──
+    function showStatus(el, msg, color, duration) {
+        el.textContent = msg;
+        el.style.color = color || '#222';
+        if (duration) setTimeout(() => { el.textContent = ''; }, duration);
+    }
+
+    // ── Load bibles.json (built-in translations) ──
+    async function loadBuiltInBibles() {
         try {
-            if (!chrome.runtime || !chrome.runtime.getURL) {
-                throw new Error("chrome.runtime.getURL is not available in this context.");
-            }
-            const response = await fetch(chrome.runtime.getURL('bibles.json'));
-            if (!response.ok) throw new Error(`HTTP error ${response.status} loading bibles.json`);
-            const bibles = await response.json();
-            
-            defaultTranslationSelect.innerHTML = ''; 
-            for (const key in bibles) {
-                if (bibles.hasOwnProperty(key)) {
-                    const option = document.createElement('option');
-                    option.value = key;
-                    option.textContent = bibles[key].displayName || bibles[key].display || key;
-                    defaultTranslationSelect.appendChild(option);
-                }
-            }
-            console.log("OptionsPage: Dropdown populated.");
+            const resp = await fetch(chrome.runtime.getURL('bibles.json'));
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            builtInBibles = await resp.json();
             return true;
-        } catch (error) {
-            console.error('OptionsPage: Failed to load bibles.json:', error);
-            statusMessage.textContent = 'Error loading translation list.';
-            statusMessage.style.color = 'red';
+        } catch (e) {
+            console.error('Failed to load bibles.json:', e);
             return false;
         }
     }
 
-    async function loadSettings() {
-        console.log("OptionsPage: Loading settings...");
-        const dropdownPopulated = await loadBiblesConfigAndPopulateDropdown();
-        // if (!dropdownPopulated) return; // Proceed even if dropdown fails, to load API keys
-
-        chrome.storage.sync.get(
-            {
-                [STORAGE_KEY_USER_DEFAULT_TRANSLATION]: 'esv', // Default to ESV if nothing saved
-                [STORAGE_KEY_USER_ESV_API_KEY]: '',
-                [STORAGE_KEY_USER_BIBLE_API_KEY]: '' 
-            },
-            (items) => {
-                if (chrome.runtime.lastError) {
-                    console.error("OptionsPage: Error loading settings:", chrome.runtime.lastError.message);
-                    statusMessage.textContent = 'Error loading saved settings.';
-                    statusMessage.style.color = 'red';
-                    return;
-                }
-                console.log("OptionsPage: Settings loaded from storage:", items);
-                esvApiKeyInput.value = items[STORAGE_KEY_USER_ESV_API_KEY] || '';
-                bibleApiKeyInput.value = items[STORAGE_KEY_USER_BIBLE_API_KEY] || '';
-                
-                if (dropdownPopulated && defaultTranslationSelect.querySelector(`option[value="${items[STORAGE_KEY_USER_DEFAULT_TRANSLATION]}"]`)) {
-                    defaultTranslationSelect.value = items[STORAGE_KEY_USER_DEFAULT_TRANSLATION];
-                } else if (dropdownPopulated && defaultTranslationSelect.options.length > 0) {
-                    console.warn("OptionsPage: Saved default translation not found in dropdown, using first option.");
-                    defaultTranslationSelect.value = defaultTranslationSelect.options[0].value;
-                } else if (!dropdownPopulated) {
-                    console.warn("OptionsPage: Dropdown not populated, cannot set default translation value.");
-                }
-            }
-        );
+    // ── Populate the default translation dropdown ──
+    function populateDropdown() {
+        els.defaultTrans.innerHTML = '';
+        const all = { ...builtInBibles, ...customTranslations };
+        for (const key in all) {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = all[key].displayName || key;
+            els.defaultTrans.appendChild(opt);
+        }
     }
 
-    if (saveButton) {
-        saveButton.addEventListener('click', () => {
-            console.log("OptionsPage: Save button clicked.");
-            const selectedDefault = defaultTranslationSelect.value;
-            const esvKey = esvApiKeyInput.value.trim();
-            const bibleKey = bibleApiKeyInput.value.trim();
-
-            chrome.storage.sync.set(
-                {
-                    [STORAGE_KEY_USER_DEFAULT_TRANSLATION]: selectedDefault,
-                    [STORAGE_KEY_USER_ESV_API_KEY]: esvKey,
-                    [STORAGE_KEY_USER_BIBLE_API_KEY]: bibleKey
-                },
-                () => {
-                    if (chrome.runtime.lastError) {
-                        console.error("OptionsPage: Error saving settings:", chrome.runtime.lastError.message);
-                        statusMessage.textContent = 'Error saving options. See console.';
-                        statusMessage.style.color = 'red';
-                    } else {
-                        console.log("OptionsPage: Options saved successfully.", { default: selectedDefault, esv: esvKey ? 'SET' : 'NOT_SET', apiBible: bibleKey ? 'SET' : 'NOT_SET' });
-                        statusMessage.textContent = 'Options Saved!';
-                        statusMessage.style.color = 'green';
-                    }
-                    setTimeout(() => { statusMessage.textContent = ''; }, 2500);
-                }
-            );
+    // ── Render custom translations list ──
+    function renderCustomList() {
+        els.customList.innerHTML = '';
+        const keys = Object.keys(customTranslations);
+        if (keys.length === 0) {
+            els.customList.innerHTML = '<p style="color:#999; font-size:0.85em;">No custom translations added yet. Use Browse above to add some.</p>';
+            return;
+        }
+        keys.forEach(code => {
+            const tr = customTranslations[code];
+            const item = document.createElement('div');
+            item.className = 'custom-tr-item';
+            item.innerHTML = `
+                <span class="tr-name"><strong>${code}</strong> — ${tr.displayName || ''}</span>
+                <span class="tr-lang">${tr.language || ''}</span>
+            `;
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.onclick = () => {
+                delete customTranslations[code];
+                chrome.storage.sync.set({ [SK.CUSTOM_TRANS]: customTranslations }, () => {
+                    renderCustomList();
+                    populateDropdown();
+                });
+            };
+            item.appendChild(removeBtn);
+            els.customList.appendChild(item);
         });
-    } else {
-        console.error("OptionsPage: Save button not found!");
     }
 
-    loadSettings(); 
-}); 
+    // ── Load all settings ──
+    async function loadAll() {
+        await loadBuiltInBibles();
+        const items = await new Promise(resolve => {
+            chrome.storage.sync.get({
+                [SK.ESV_KEY]: '',
+                [SK.BIBLE_KEY]: '',
+                [SK.DEFAULT_TRANS]: 'esv',
+                [SK.CUSTOM_TRANS]: {},
+                [SK.POPUP_FONT_SIZE]: '14',
+                [SK.POPUP_THEME]: 'auto',
+                [SK.POPUP_MAX_WIDTH]: '520',
+            }, resolve);
+        });
+        els.esvKey.value = items[SK.ESV_KEY] || '';
+        els.bibleKey.value = items[SK.BIBLE_KEY] || '';
+        customTranslations = items[SK.CUSTOM_TRANS] || {};
+        if (els.fontSize) els.fontSize.value = items[SK.POPUP_FONT_SIZE] || '14';
+        if (els.theme) els.theme.value = items[SK.POPUP_THEME] || 'auto';
+        if (els.maxWidth) els.maxWidth.value = items[SK.POPUP_MAX_WIDTH] || '520';
+
+        populateDropdown();
+        const saved = items[SK.DEFAULT_TRANS];
+        if (els.defaultTrans.querySelector(`option[value="${saved}"]`)) {
+            els.defaultTrans.value = saved;
+        }
+        renderCustomList();
+    }
+
+    // ── Save all settings ──
+    els.saveBtn.addEventListener('click', () => {
+        chrome.storage.sync.set({
+            [SK.ESV_KEY]: (els.esvKey.value || '').trim(),
+            [SK.BIBLE_KEY]: (els.bibleKey.value || '').trim(),
+            [SK.DEFAULT_TRANS]: els.defaultTrans.value,
+            [SK.CUSTOM_TRANS]: customTranslations,
+            [SK.POPUP_FONT_SIZE]: els.fontSize.value,
+            [SK.POPUP_THEME]: els.theme.value,
+            [SK.POPUP_MAX_WIDTH]: els.maxWidth.value,
+        }, () => {
+            if (chrome.runtime.lastError) {
+                showStatus(els.status, 'Error: ' + chrome.runtime.lastError.message, 'red', 3000);
+            } else {
+                showStatus(els.status, 'All settings saved!', 'green', 2500);
+            }
+        });
+    });
+
+    // ── Browse Available Bibles from api.bible ──
+    els.browseBtn.addEventListener('click', async () => {
+        const apiKey = (els.bibleKey.value || '').trim();
+        if (!apiKey || apiKey.includes('PLACEHOLDER')) {
+            showStatus(els.browseStatus, 'Enter your api.bible API key above first.', 'red', 3000);
+            return;
+        }
+        showStatus(els.browseStatus, 'Fetching available Bibles...', '#888');
+        els.browseResults.innerHTML = '';
+
+        const lang = els.browseLang.value;
+        let url = 'https://api.scripture.api.bible/v1/bibles';
+        if (lang) url += '?language=' + lang;
+
+        try {
+            const resp = await fetch(url, { headers: { 'api-key': apiKey } });
+            if (!resp.ok) {
+                const errBody = await resp.text().catch(() => '');
+                throw new Error(`HTTP ${resp.status}: ${errBody.slice(0, 200)}`);
+            }
+            const data = await resp.json();
+            const bibles = data.data || [];
+            if (bibles.length === 0) {
+                showStatus(els.browseStatus, 'No Bibles found for that language filter.', '#888', 3000);
+                return;
+            }
+            showStatus(els.browseStatus, `Found ${bibles.length} Bible(s):`, '#333');
+
+            let html = '<table><thead><tr><th>Name</th><th>Language</th><th>Abbr</th><th></th></tr></thead><tbody>';
+            bibles.forEach(b => {
+                const name = b.name || b.nameLocal || '?';
+                const langName = b.language ? (b.language.name || b.language.id || '') : '';
+                const abbr = b.abbreviation || b.abbreviationLocal || '';
+                const id = b.id;
+                const alreadyAdded = customTranslations[abbr.toLowerCase()] || builtInBibles[abbr.toLowerCase()];
+                html += `<tr>
+                    <td title="ID: ${id}">${name}</td>
+                    <td>${langName}</td>
+                    <td><code>${abbr}</code></td>
+                    <td>${alreadyAdded
+                        ? '<span style="color:#888; font-size:0.85em;">Added</span>'
+                        : `<button class="add-bible-btn" data-id="${id}" data-name="${name.replace(/"/g, '&quot;')}" data-abbr="${abbr}" data-lang="${langName}">Add</button>`
+                    }</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            els.browseResults.innerHTML = html;
+
+            // Wire add buttons
+            els.browseResults.querySelectorAll('.add-bible-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const bibleId = btn.dataset.id;
+                    const name = btn.dataset.name;
+                    const abbr = (btn.dataset.abbr || bibleId).toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const lang = btn.dataset.lang;
+                    const code = abbr || bibleId.slice(0, 8);
+
+                    customTranslations[code] = {
+                        displayName: name,
+                        apiType: 'scripture_api_bible',
+                        bibleId: bibleId,
+                        apiKey: '__BIBLE_API_KEY_PLACEHOLDER__',
+                        language: lang,
+                    };
+                    chrome.storage.sync.set({ [SK.CUSTOM_TRANS]: customTranslations }, () => {
+                        btn.replaceWith(Object.assign(document.createElement('span'), {
+                            textContent: 'Added!', style: 'color:green; font-size:0.85em;'
+                        }));
+                        renderCustomList();
+                        populateDropdown();
+                    });
+                });
+            });
+        } catch (e) {
+            console.error('Browse error:', e);
+            showStatus(els.browseStatus, 'Error: ' + e.message, 'red', 5000);
+        }
+    });
+
+    // ── Init ──
+    await loadAll();
+});

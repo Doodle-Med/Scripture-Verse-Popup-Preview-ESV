@@ -9,6 +9,10 @@ const STORAGE_KEY_LAST_TRANSLATION_CONTENT = 'lastSelectedTranslationContent';
 const STORAGE_KEY_USER_DEFAULT_TRANSLATION = 'userDefaultGlobalTranslation';
 const STORAGE_KEY_USER_ESV_API_KEY = 'userEsvApiKey';
 const STORAGE_KEY_USER_BIBLE_API_KEY = 'userApiBibleApiKey';
+const STORAGE_KEY_CUSTOM_TRANSLATIONS = 'customTranslations';
+const STORAGE_KEY_POPUP_FONT_SIZE = 'popupFontSize';
+const STORAGE_KEY_POPUP_THEME = 'popupTheme';
+const STORAGE_KEY_POPUP_MAX_WIDTH = 'popupMaxWidth';
 
 let popup = null;
 let currentSelectionRefs = null;
@@ -521,9 +525,17 @@ async function fetchVerses(refDetails, translationCode, currentBiblesData, userK
 // Popup theming (dark/light)
 // ──────────────────────────────────────────────
 
-function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyBtn, linkBtn, contentDivEl) {
+function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyBtn, linkBtn, contentDivEl, appearanceOpts) {
     if (!popupEl) return;
-    const isDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const opts = appearanceOpts || {};
+    const themeMode = opts.theme || 'auto';
+    let isDark;
+    if (themeMode === 'dark') isDark = true;
+    else if (themeMode === 'light') isDark = false;
+    else isDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    const fontSize = (opts.fontSize || '14') + 'px';
+    const maxWidth = (opts.maxWidth || '520') + 'px';
 
     const bg       = isDark ? '#2f3136' : '#ffffff';
     const fg       = isDark ? '#dcddde' : '#212529';
@@ -538,8 +550,8 @@ function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyB
     const hdrColor = isDark ? '#e5c07b' : '#c94e50';
 
     Object.assign(popupEl.style, {
-        fontFamily: 'Segoe UI, Roboto, Arial, sans-serif', fontSize: '14px', lineHeight: '1.6',
-        minWidth: '300px', maxWidth: '520px', maxHeight: '480px', overflowY: 'auto',
+        fontFamily: 'Segoe UI, Roboto, Arial, sans-serif', fontSize: fontSize, lineHeight: '1.6',
+        minWidth: '280px', maxWidth: maxWidth, maxHeight: '480px', overflowY: 'auto',
         padding: '12px', borderRadius: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.2)',
         background: bg, color: fg, border: border
     });
@@ -563,6 +575,9 @@ function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyB
     };
     styleBtn(copyBtn);
     styleBtn(linkBtn);
+    // Also style the TTS button if present
+    const ttsBtn = popupEl.querySelector('#svp-tts-button');
+    styleBtn(ttsBtn);
 
     if (actionsContainerEl) Object.assign(actionsContainerEl.style, {
         display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
@@ -573,8 +588,8 @@ function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyB
 
     // Style rendered content
     if (contentDivEl) {
-        contentDivEl.querySelectorAll('span.svp-passage-text').forEach(el => Object.assign(el.style, { fontSize: '14px', lineHeight: '1.65' }));
-        contentDivEl.querySelectorAll('strong.svp-reference-title').forEach(el => Object.assign(el.style, { fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', display: 'block' }));
+        contentDivEl.querySelectorAll('span.svp-passage-text').forEach(el => Object.assign(el.style, { fontSize: fontSize, lineHeight: '1.65' }));
+        contentDivEl.querySelectorAll('strong.svp-reference-title').forEach(el => Object.assign(el.style, { fontSize: fontSize, fontWeight: 'bold', marginBottom: '6px', display: 'block' }));
         contentDivEl.querySelectorAll('em.svp-error-message').forEach(el => Object.assign(el.style, { fontStyle: 'italic', fontSize: '13px', color: errColor }));
         contentDivEl.querySelectorAll('h3').forEach(h3 => Object.assign(h3.style, {
             marginTop: '15px', marginBottom: '8px', fontSize: '1.05em', fontWeight: '600',
@@ -690,10 +705,14 @@ async function handleTextSelectionEvent(event) {
             [STORAGE_KEY_USER_ESV_API_KEY]: '',
             [STORAGE_KEY_USER_BIBLE_API_KEY]: '',
             [STORAGE_KEY_USER_DEFAULT_TRANSLATION]: 'esv',
-            [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: null
+            [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: null,
+            [STORAGE_KEY_CUSTOM_TRANSLATIONS]: {},
+            [STORAGE_KEY_POPUP_FONT_SIZE]: '14',
+            [STORAGE_KEY_POPUP_THEME]: 'auto',
+            [STORAGE_KEY_POPUP_MAX_WIDTH]: '520',
         }, items => {
             if (chrome.runtime.lastError) {
-                resolve({ userEsvApiKey: '', userApiBibleApiKey: '', userDefaultGlobalTranslation: 'esv', lastSelectedTranslationContent: null });
+                resolve({});
             } else {
                 resolve(items);
             }
@@ -704,6 +723,17 @@ async function handleTextSelectionEvent(event) {
         esvApiKey: settings[STORAGE_KEY_USER_ESV_API_KEY],
         bibleApiKey: settings[STORAGE_KEY_USER_BIBLE_API_KEY]
     };
+    const appearanceOpts = {
+        fontSize: settings[STORAGE_KEY_POPUP_FONT_SIZE] || '14',
+        theme: settings[STORAGE_KEY_POPUP_THEME] || 'auto',
+        maxWidth: settings[STORAGE_KEY_POPUP_MAX_WIDTH] || '520',
+    };
+
+    // Merge custom translations from storage with built-in bibles
+    const customTrans = settings[STORAGE_KEY_CUSTOM_TRANSLATIONS] || {};
+    if (Object.keys(customTrans).length > 0) {
+        Object.assign(currentBiblesData, customTrans);
+    }
 
     // ── Build popup DOM ──
 
@@ -740,6 +770,13 @@ async function handleTextSelectionEvent(event) {
     linkButton.title = 'View full chapter on Bible Gateway';
     actionsContainer.appendChild(linkButton);
 
+    // TTS Read Aloud button (uses free Web Speech API built into Chrome)
+    const ttsButton = document.createElement('button');
+    ttsButton.id = 'svp-tts-button';
+    ttsButton.textContent = '\u{1F50A} Read';
+    ttsButton.title = 'Read aloud (Text-to-Speech)';
+    actionsContainer.appendChild(ttsButton);
+
     popup.appendChild(actionsContainer);
 
     // Content area
@@ -755,7 +792,7 @@ async function handleTextSelectionEvent(event) {
     popup.style.left = `${window.scrollX + rect.left}px`;
 
     // Apply theme immediately so the popup is visible
-    applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+    applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv, appearanceOpts);
 
     // ── Determine initial translation ──
 
@@ -784,7 +821,7 @@ async function handleTextSelectionEvent(event) {
 
         let loadingMsg = refs.length === 1 ? `Loading ${buildRefDisplayString(refs[0])}...` : `Loading ${refs.length} references...`;
         contentDiv.innerHTML = `<em style="color: ${loadingColor}; font-style: italic;">${loadingMsg} (${transName})</em>`;
-        applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+        applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv, appearanceOpts);
 
         let combinedHtml = '';
         for (let i = 0; i < refs.length; i++) {
@@ -792,7 +829,7 @@ async function handleTextSelectionEvent(event) {
             combinedHtml += await fetchVerses(refs[i], translationCode, currentBiblesData, userKeys, optionsPageUrl);
         }
         contentDiv.innerHTML = combinedHtml;
-        applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+        applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv, appearanceOpts);
         adjustPopupPosition(popup, selectionRect);
     }
 
@@ -859,6 +896,42 @@ async function handleTextSelectionEvent(event) {
         window.open(url, '_blank');
     });
 
+    // ── TTS Read Aloud handler (Web Speech API — free, no key needed) ──
+
+    ttsButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            ttsButton.textContent = '\u{1F50A} Read';
+            return;
+        }
+        // Extract plain text from the verse content
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = contentDiv.innerHTML;
+        tempDiv.querySelectorAll('strong.svp-reference-title').forEach(el => el.remove());
+        tempDiv.querySelectorAll('sup').forEach(sup => sup.remove());
+        tempDiv.querySelectorAll('.svp-error-message').forEach(el => el.remove());
+        const plainText = (tempDiv.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!plainText || plainText.length < 5) return;
+
+        const utterance = new SpeechSynthesisUtterance(plainText);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        // Try to pick a good English voice
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = voices.find(v => v.name.includes('Samantha') || v.name.includes('Google US') || v.name.includes('Alex'));
+        if (preferred) utterance.voice = preferred;
+        else {
+            const english = voices.find(v => v.lang.startsWith('en'));
+            if (english) utterance.voice = english;
+        }
+        utterance.onstart = () => { ttsButton.textContent = '\u23F9 Stop'; };
+        utterance.onend = () => { ttsButton.textContent = '\u{1F50A} Read'; };
+        utterance.onerror = () => { ttsButton.textContent = '\u{1F50A} Read'; };
+        window.speechSynthesis.speak(utterance);
+    });
+    ttsButton.addEventListener('mousedown', e => e.stopPropagation());
+
     // ── Prevent interactions inside popup from dismissing it ──
 
     translationSelect.addEventListener('mousedown', e => e.stopPropagation());
@@ -870,7 +943,7 @@ async function handleTextSelectionEvent(event) {
 
     if (typeof window !== 'undefined' && window.matchMedia) {
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-            applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+            applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv, appearanceOpts);
         });
     }
 

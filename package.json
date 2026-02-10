@@ -11,7 +11,7 @@
   "scripts": {
     "bump": "jq '.version |= (split(\".\") | [.[0], .[1], ((.[2]|tonumber)+1)] | join(\".\"))' manifest.json > m.tmp && mv m.tmp manifest.json",
     "test": "node --test",
-    "zip": "zip -r extension.zip . -x '*.git*' '*.github*' 'node_modules/*' 'test/*' '*.md' 'package*.json' 'new.png' 'injectedPopup.js'",
+    "zip": "zip -r extension.zip . -x '*.git*' '*.github*' 'node_modules/*' 'test/*' 'test-results/*' '*.md' 'package*.json' 'new.png' 'injectedPopup.js' '.DS_Store'",
     "publish": "npx chrome-webstore-upload-cli upload --source extension.zip && npx chrome-webstore-upload-cli publish",
     "test:e2e": "node test/extension-e2e.spec.mjs",
     "test:extension:open": "HEADED=1 node test/extension-e2e.spec.mjs"
