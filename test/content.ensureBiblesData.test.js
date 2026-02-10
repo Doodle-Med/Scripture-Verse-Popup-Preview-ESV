@@ -31,7 +31,7 @@ test('ensureBiblesData fetches bible data once and caches it', async () => {
       status: 200,
       async json() {
         return {
-          ESV: { display: 'ESV', api_code: 'ESV', api_id: 'esv', api: 'esv.org' }
+          esv: { displayName: 'ESV', apiType: 'esv_org', apiKey: '__ESV_API_KEY_PLACEHOLDER__' }
         };
       }
     };
@@ -41,7 +41,7 @@ test('ensureBiblesData fetches bible data once and caches it', async () => {
     const { ensureBiblesData } = loadModule();
     const first = await ensureBiblesData();
     assert.equal(responses.length, 1);
-    assert.equal(first.ESV.display, 'ESV');
+    assert.equal(first.esv.displayName, 'ESV');
 
     global.fetch = async () => {
       throw new Error('should not refetch');
@@ -66,8 +66,8 @@ test('ensureBiblesData provides a fallback when fetch fails', async () => {
     const { ensureBiblesData } = loadModule();
     const data = await ensureBiblesData();
     assert.equal(fetchCalls, 1);
-    assert(data.ESV);
-    assert.equal(data.ESV.apiKey, '__ESV_API_KEY_PLACEHOLDER__');
+    assert(data.esv);
+    assert.equal(data.esv.apiKey, '__ESV_API_KEY_PLACEHOLDER__');
     const second = await ensureBiblesData();
     assert.equal(fetchCalls, 1);
     assert.strictEqual(second, data);
@@ -75,4 +75,3 @@ test('ensureBiblesData provides a fallback when fetch fails', async () => {
     delete global.fetch;
   }
 });
-

@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 
 const DEFAULT_BIBLES_DATA = {
-  ESV: { display: 'English Standard Version', api_code: 'ESV', api_id: 'esv', api: 'esv.org' },
-  NIV: { display: 'New International Version', api_code: 'NIV', api_id: 'niv', api: 'api.bible' }
+  esv: { displayName: 'English Standard Version', apiType: 'esv_org', apiKey: '__ESV_API_KEY_PLACEHOLDER__' },
+  kjv: { displayName: 'King James Version', apiType: 'bible-api.com', api_id: 'kjv', apiKey: null }
 };
 
 function setupBrowserEnv() {
@@ -154,13 +154,13 @@ test('content script registers DOM and runtime listeners when in a browser conte
   }
 });
 
-test('handleTextSelectionEvent creates a popup with parsed references and payload data', { concurrency: false }, async () => {
+test('handleTextSelectionEvent creates a popup with translation select and content area', { concurrency: false }, async () => {
   const harness = loadContentModule({
     biblesData: DEFAULT_BIBLES_DATA,
     storageGetValues: {
       userEsvApiKey: 'test-esv',
       userApiBibleApiKey: 'test-bible-api',
-      userDefaultGlobalTranslation: 'niv',
+      userDefaultGlobalTranslation: 'kjv',
       lastSelectedTranslationContent: 'esv'
     }
   });
@@ -181,25 +181,38 @@ test('handleTextSelectionEvent creates a popup with parsed references and payloa
 
     await harness.contentModule.handleTextSelectionEvent({ button: 0, target: span });
 
-    assert.equal(harness.fetchCalls.length, 1, 'expected bible data to be fetched once');
+    // Verify bibles.json was fetched (plus verse API calls for each ref)
+    assert(harness.fetchCalls.length >= 1, 'expected at least one fetch call (bibles.json)');
+    assert(harness.fetchCalls[0].includes('bibles.json'), 'first fetch should be bibles.json');
+
+    // Verify popup container exists
     const popup = document.getElementById('bible-popup-container');
     assert(popup, 'expected popup container to exist');
-    const payload = JSON.parse(popup.getAttribute('data-svp-payload'));
-    assert.equal(payload.initialRefs.length, 2);
-    assert.equal(payload.initialRefs[0].book, 'John');
-    assert.equal(payload.initialRefs[1].book, 'Jude');
-    assert.equal(payload.optionsPageUrl, 'chrome-extension://test/options.html');
-    assert.equal(payload.userDefaultGlobalTranslation, 'niv');
-    assert.equal(payload.lastSelectedTranslationContent, 'esv');
 
+    // Verify translation select exists with correct options
     const translationSelect = document.getElementById('svp-translation-select');
     assert(translationSelect, 'expected translation select to be rendered');
     assert.equal(translationSelect.options.length, Object.keys(DEFAULT_BIBLES_DATA).length);
 
-    const injectedScript = document.getElementById('svp-logic-injector');
-    assert(injectedScript, 'expected injected script element to exist');
-    assert.equal(injectedScript.getAttribute('src'), 'chrome-extension://test/injectedPopup.js');
+    // Verify content area exists (no longer an injected script — content is rendered directly)
+    const contentDiv = document.getElementById('svp-verse-content');
+    assert(contentDiv, 'expected verse content area to exist');
 
+    // Verify action buttons exist
+    const copyButton = document.getElementById('svp-copy-button');
+    assert(copyButton, 'expected copy button to exist');
+    const linkButton = document.getElementById('svp-link-button');
+    assert(linkButton, 'expected link button to exist');
+
+    // Verify NO injected script element (the old architecture bug)
+    const injectedScript = document.getElementById('svp-logic-injector');
+    assert.equal(injectedScript, null, 'expected NO injected script element (architecture fix)');
+
+    // Verify popup has visible styling (applyPopupTheme was called)
+    assert(popup.style.background, 'expected popup to have a background style');
+    assert(popup.style.fontFamily, 'expected popup to have font-family style');
+
+    // Verify popup can be removed
     harness.contentModule.removePopup(null);
     assert.equal(document.getElementById('bible-popup-container'), null, 'expected popup to be removed');
   } finally {
@@ -238,6 +251,56 @@ test('handleTextSelectionEvent ignores selections originating from inputs and ed
 
     harness.dom.window.getSelection = originalGetSelection;
     global.window.getSelection = originalGetSelection;
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('popup renders with dark mode styling when prefers-color-scheme is dark', { concurrency: false }, async () => {
+  const harness = loadContentModule({
+    biblesData: DEFAULT_BIBLES_DATA,
+    storageGetValues: {
+      userEsvApiKey: '',
+      userApiBibleApiKey: '',
+      userDefaultGlobalTranslation: 'esv',
+      lastSelectedTranslationContent: null
+    }
+  });
+
+  try {
+    const win = harness.dom.window;
+    const { document } = win;
+
+    // Simulate dark mode
+    const originalMatchMedia = win.matchMedia;
+    win.matchMedia = (query) => {
+      if (query === '(prefers-color-scheme: dark)') {
+        return { matches: true, addEventListener: () => {} };
+      }
+      return originalMatchMedia ? originalMatchMedia(query) : { matches: false, addEventListener: () => {} };
+    };
+    global.window.matchMedia = win.matchMedia;
+
+    const span = document.createElement('span');
+    span.textContent = 'Romans 8:28';
+    document.body.appendChild(span);
+
+    const selection = win.getSelection();
+    selection.removeAllRanges();
+    const range = document.createRange();
+    range.setStart(span.firstChild, 0);
+    range.setEnd(span.firstChild, span.textContent.length);
+    range.getBoundingClientRect = () => ({ top: 50, left: 50, bottom: 70, right: 120, width: 70, height: 20 });
+    selection.addRange(range);
+
+    await harness.contentModule.handleTextSelectionEvent({ button: 0, target: span });
+
+    const popup = document.getElementById('bible-popup-container');
+    assert(popup, 'expected popup in dark mode');
+    assert(popup.style.background.includes('2f3136') || popup.style.background === '#2f3136' || popup.style.background === 'rgb(47, 49, 54)',
+      `expected dark background, got: ${popup.style.background}`);
+
+    harness.contentModule.removePopup(null);
   } finally {
     harness.cleanup();
   }

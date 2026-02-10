@@ -39,7 +39,7 @@ jobs:
             cat "$MANIFEST_PATH"
             exit 1
           fi
-          jq --argjson current_version "$current_version_val" \
+          jq --arg current_version "$current_version_val" \
              '.version = ($current_version | split(".") | .[0] + "." + .[1] + "." + ((.[2]|tonumber)+1|tostring))' \
              "$MANIFEST_PATH" > "$TMP_MANIFEST" && mv "$TMP_MANIFEST" "$MANIFEST_PATH"
           

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Scripture Popup – Test Page</title>
+  <style>
+    body { font-family: Georgia, serif; max-width: 720px; margin: 2em auto; padding: 0 1em; line-height: 1.7; }
+    h1 { font-size: 1.5em; border-bottom: 1px solid #ccc; padding-bottom: 0.3em; }
+    h2 { font-size: 1.1em; color: #444; margin-top: 1.8em; }
+    .ref { background: rgba(255,220,100,0.25); padding: 0 2px; cursor: text; }
+    .hint { font-size: 0.85em; color: #666; margin-top: 2em; }
+    ul { margin: 0.5em 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <h1>Scripture Verse Popup – Test Page</h1>
+  <p>Select (highlight) any Bible reference below with your mouse. The extension popup should appear with the verse text. Use this page to verify all update behavior.</p>
+
+  <h2>Single verses</h2>
+  <p>As it is written: <span class="ref">John 3:16</span>. For God so loved the world…</p>
+  <p>Another: <span class="ref">Romans 8:28</span> and <span class="ref">Psalm 23:1</span>.</p>
+  <p>With period: <span class="ref">Gen. 1:1</span>. In the beginning…</p>
+  <p>Quoted: “<span class="ref">Matthew 5:14</span>” — you are the light.</p>
+
+  <h2>Verse ranges</h2>
+  <p>Range: <span class="ref">Romans 12:1-2</span>.</p>
+  <p>Same chapter: <span class="ref">Psalm 119:105-112</span>.</p>
+  <p>En dash: <span class="ref">Philippians 4:8–9</span>.</p>
+
+  <h2>Full chapter</h2>
+  <p>Chapter only: <span class="ref">Genesis 1</span> and <span class="ref">1 Corinthians 13</span>.</p>
+
+  <h2>Abbreviations &amp; formats</h2>
+  <p>Abbrev: <span class="ref">1 Cor 6:19-20</span>, <span class="ref">Rev 21:4</span>, <span class="ref">Jn 14:6</span>.</p>
+  <p>Single-chapter book: <span class="ref">Jude 24</span>, <span class="ref">2 John 1-4</span>.</p>
+  <p>Prefix label: Reference: <span class="ref">Hebrews 11:1</span>.</p>
+
+  <h2>Multiple refs in one selection</h2>
+  <p>Select this whole sentence: <span class="ref">John 3:16</span>; <span class="ref">Romans 8:28</span>.</p>
+
+  <h2>Browser action popup</h2>
+  <p>Click the extension icon in the toolbar. Enter a reference (e.g. <code>1 Cor 6:19</code> or <code>Psalm 23</code>) and click Parse. Verify verse loads.</p>
+
+  <h2>Options</h2>
+  <p>Right‑click extension icon → Options. Set default translation, ESV API key (if using ESV), and api.bible key (if using NKJV/NASB). Save and confirm popups respect default.</p>
+
+  <p class="hint">Expected: popup appears below selection; translation dropdown works; Copy and Context buttons work; clicking outside closes popup; dark/light theme matches system.</p>
+</body>
+</html>

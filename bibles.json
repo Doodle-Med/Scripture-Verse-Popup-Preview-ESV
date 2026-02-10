@@ -43,13 +43,13 @@
   "nkjv": {
     "displayName": "NKJV (New King James Version)",
     "apiType": "scripture_api_bible",
-    "bibleId": "VERIFY_AND_REPLACE_NKJV_BIBLE_ID",
+    "bibleId": "de4e12af7f28f599-02",
     "apiKey": "__BIBLE_API_KEY_PLACEHOLDER__"
   },
   "nasb": {
     "displayName": "NASB (New American Standard Bible)",
     "apiType": "scripture_api_bible",
-    "bibleId": "VERIFY_AND_REPLACE_NASB_BIBLE_ID",
+    "bibleId": "592420522e16049f-01",
     "apiKey": "__BIBLE_API_KEY_PLACEHOLDER__"
   }
 } 

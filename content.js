@@ -1,193 +1,163 @@
-console.error("!!!! CONTENT.JS - VERSION PSI-STABLE - CHECK THIS LOG !!!!");
-console.log('[SVP_INFO] content.js: PSI-STABLE loaded.');
+console.log('[SVP_INFO] content.js: v3.0 loaded.');
 
-const POPUP_Z_INDEX = '2147483647'; // Max z-index
-const LEVENSHTEIN_BOOK_MATCH_THRESHOLD = 2; // Max distance for a fuzzy book name match
-const SELECTION_DEBOUNCE_MS = 300; // Delay for debouncing mouseup events
-const STORAGE_KEY_LAST_TRANSLATION_CONTENT = 'lastSelectedTranslationContent'; // Added
+const POPUP_Z_INDEX = '2147483647';
+const LEVENSHTEIN_BOOK_MATCH_THRESHOLD = 2;
+const SELECTION_DEBOUNCE_MS = 300;
+const POPUP_VIEWPORT_MARGIN = 10;
+const FETCH_TIMEOUT_MS = 15000;
+const STORAGE_KEY_LAST_TRANSLATION_CONTENT = 'lastSelectedTranslationContent';
 const STORAGE_KEY_USER_DEFAULT_TRANSLATION = 'userDefaultGlobalTranslation';
 const STORAGE_KEY_USER_ESV_API_KEY = 'userEsvApiKey';
 const STORAGE_KEY_USER_BIBLE_API_KEY = 'userApiBibleApiKey';
 
 let popup = null;
-console.log('[PSI_DEBUG] content.js: popup variable initialized.');
+let currentSelectionRefs = null;
 
-// Debounce utility function
+// ──────────────────────────────────────────────
+// Utility helpers
+// ──────────────────────────────────────────────
+
 function debounce(func, delay) {
     let timeoutId;
     return function(...args) {
-        console.log(`[SVP_DEBUG] Debounce: Event triggered. Clearing previous timeout (if any). Will call function in ${delay}ms if no new event.`);
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
-            console.log(`[SVP_DEBUG] Debounce: Delay elapsed. Executing function.`);
             func.apply(this, args);
         }, delay);
     };
 }
 
-// Function to escape special regex characters
 function escapeRegExp(string) {
-  return string.replace(/[.*+?^${}()|[\\\]\\]/g, '\\$&'); // $& means the whole matched string
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// ──────────────────────────────────────────────
+// Book name mapping
+// ──────────────────────────────────────────────
+
 const bookMap = {
-  // Canonical Name: Genesis
   "genesis": "Genesis", "gen": "Genesis", "ge": "Genesis", "gn": "Genesis",
-  // Canonical Name: Exodus
   "exodus": "Exodus", "exod": "Exodus", "exo": "Exodus", "ex": "Exodus",
-  // Canonical Name: Leviticus
   "leviticus": "Leviticus", "lev": "Leviticus", "le": "Leviticus", "lv": "Leviticus",
-  // Canonical Name: Numbers
   "numbers": "Numbers", "num": "Numbers", "nu": "Numbers", "nm": "Numbers", "nb": "Numbers",
-  // Canonical Name: Deuteronomy
   "deuteronomy": "Deuteronomy", "deut": "Deuteronomy", "de": "Deuteronomy", "dt": "Deuteronomy",
-  // Canonical Name: Joshua
   "joshua": "Joshua", "josh": "Joshua", "jos": "Joshua", "jsh": "Joshua",
-  // Canonical Name: Judges
   "judges": "Judges", "judg": "Judges", "jdg": "Judges", "jdgs": "Judges", "jg": "Judges",
-  // Canonical Name: Ruth
   "ruth": "Ruth", "rth": "Ruth", "ru": "Ruth",
-  // Canonical Name: 1 Samuel
-  "1 samuel": "1 Samuel", "1samuel": "1 Samuel", "1sam": "1 Samuel", "1sa": "1 Samuel", "1 sm": "1 Samuel", "1sa": "1 Samuel", "1st samuel": "1 Samuel", "first samuel": "1 Samuel", "i samuel": "1 Samuel", "i sam": "1 Samuel",
-  // Canonical Name: 2 Samuel
-  "2 samuel": "2 Samuel", "2samuel": "2 Samuel", "2sam": "2 Samuel", "2sa": "2 Samuel", "2 sm": "2 Samuel", "2sa": "2 Samuel", "2nd samuel": "2 Samuel", "second samuel": "2 Samuel", "ii samuel": "2 Samuel", "ii sam": "2 Samuel",
-  // Canonical Name: 1 Kings
+  "1 samuel": "1 Samuel", "1samuel": "1 Samuel", "1sam": "1 Samuel", "1sa": "1 Samuel", "1 sm": "1 Samuel", "1st samuel": "1 Samuel", "first samuel": "1 Samuel", "i samuel": "1 Samuel", "i sam": "1 Samuel",
+  "2 samuel": "2 Samuel", "2samuel": "2 Samuel", "2sam": "2 Samuel", "2sa": "2 Samuel", "2 sm": "2 Samuel", "2nd samuel": "2 Samuel", "second samuel": "2 Samuel", "ii samuel": "2 Samuel", "ii sam": "2 Samuel",
   "1 kings": "1 Kings", "1kings": "1 Kings", "1kin": "1 Kings", "1ki": "1 Kings", "1 kgs": "1 Kings", "1st kings": "1 Kings", "first kings": "1 Kings", "i kings": "1 Kings", "i kgs": "1 Kings",
-  // Canonical Name: 2 Kings
   "2 kings": "2 Kings", "2kings": "2 Kings", "2kin": "2 Kings", "2ki": "2 Kings", "2 kgs": "2 Kings", "2nd kings": "2 Kings", "second kings": "2 Kings", "ii kings": "2 Kings", "ii kgs": "2 Kings",
-  // Canonical Name: 1 Chronicles
   "1 chronicles": "1 Chronicles", "1chronicles": "1 Chronicles", "1chron": "1 Chronicles", "1chr": "1 Chronicles", "1 ch": "1 Chronicles", "1st chronicles": "1 Chronicles", "first chronicles": "1 Chronicles", "i chronicles": "1 Chronicles", "i chron": "1 Chronicles",
-  // Canonical Name: 2 Chronicles
   "2 chronicles": "2 Chronicles", "2chronicles": "2 Chronicles", "2chron": "2 Chronicles", "2chr": "2 Chronicles", "2 ch": "2 Chronicles", "2nd chronicles": "2 Chronicles", "second chronicles": "2 Chronicles", "ii chronicles": "2 Chronicles", "ii chron": "2 Chronicles",
-  // Canonical Name: Ezra
   "ezra": "Ezra", "ezr": "Ezra",
-  // Canonical Name: Nehemiah
   "nehemiah": "Nehemiah", "neh": "Nehemiah", "ne": "Nehemiah",
-  // Canonical Name: Esther
   "esther": "Esther", "est": "Esther", "esth": "Esther",
-  // Canonical Name: Job
   "job": "Job", "jb": "Job",
-  // Canonical Name: Psalms
   "psalms": "Psalms", "psalm": "Psalms", "psa": "Psalms", "ps": "Psalms", "pss": "Psalms", "psm": "Psalms", "pslm": "Psalms",
-  // Canonical Name: Proverbs
   "proverbs": "Proverbs", "prov": "Proverbs", "pro": "Proverbs", "prv": "Proverbs", "pr": "Proverbs",
-  // Canonical Name: Ecclesiastes
   "ecclesiastes": "Ecclesiastes", "eccles": "Ecclesiastes", "eccl": "Ecclesiastes", "ecc": "Ecclesiastes", "ec": "Ecclesiastes", "qoh": "Ecclesiastes", "qoheleth": "Ecclesiastes",
-  // Canonical Name: Song of Solomon
   "song of solomon": "Song of Solomon", "songofsolomon": "Song of Solomon", "song of songs": "Song of Solomon", "songofsongs": "Song of Solomon", "song": "Song of Solomon", "sos": "Song of Solomon", "canticles": "Song of Solomon", "cant": "Song of Solomon",
-  // Canonical Name: Isaiah
   "isaiah": "Isaiah", "isa": "Isaiah", "is": "Isaiah",
-  // Canonical Name: Jeremiah
   "jeremiah": "Jeremiah", "jer": "Jeremiah", "je": "Jeremiah", "jerem": "Jeremiah",
-  // Canonical Name: Lamentations
   "lamentations": "Lamentations", "lam": "Lamentations", "la": "Lamentations",
-  // Canonical Name: Ezekiel
   "ezekiel": "Ezekiel", "ezek": "Ezekiel", "eze": "Ezekiel", "ezk": "Ezekiel",
-  // Canonical Name: Daniel
   "daniel": "Daniel", "dan": "Daniel", "da": "Daniel", "dn": "Daniel",
-  // Canonical Name: Hosea
   "hosea": "Hosea", "hos": "Hosea", "ho": "Hosea",
-  // Canonical Name: Joel
   "joel": "Joel", "joe": "Joel", "jl": "Joel",
-  // Canonical Name: Amos
   "amos": "Amos", "am": "Amos",
-  // Canonical Name: Obadiah
   "obadiah": "Obadiah", "obad": "Obadiah", "ob": "Obadiah", "oba": "Obadiah",
-  // Canonical Name: Jonah
   "jonah": "Jonah", "jon": "Jonah", "jnh": "Jonah",
-  // Canonical Name: Micah
   "micah": "Micah", "mic": "Micah", "mi": "Micah",
-  // Canonical Name: Nahum
   "nahum": "Nahum", "nah": "Nahum", "na": "Nahum",
-  // Canonical Name: Habakkuk
   "habakkuk": "Habakkuk", "hab": "Habakkuk", "hk": "Habakkuk", "habak": "Habakkuk",
-  // Canonical Name: Zephaniah
   "zephaniah": "Zephaniah", "zeph": "Zephaniah", "zep": "Zephaniah", "zp": "Zephaniah",
-  // Canonical Name: Haggai
   "haggai": "Haggai", "hag": "Haggai", "hg": "Haggai",
-  // Canonical Name: Zechariah
   "zechariah": "Zechariah", "zech": "Zechariah", "zec": "Zechariah", "zc": "Zechariah",
-  // Canonical Name: Malachi
   "malachi": "Malachi", "mal": "Malachi", "ml": "Malachi",
-  // Canonical Name: Matthew
   "matthew": "Matthew", "matt": "Matthew", "mat": "Matthew", "mt": "Matthew",
-  // Canonical Name: Mark
   "mark": "Mark", "mrk": "Mark", "mar": "Mark", "mk": "Mark",
-  // Canonical Name: Luke
   "luke": "Luke", "luk": "Luke", "lk": "Luke",
-  // Canonical Name: John
   "john": "John", "joh": "John", "jn": "John", "jhn": "John", "jo": "John",
-  // Canonical Name: Acts
   "acts": "Acts", "act": "Acts", "ac": "Acts",
-  // Canonical Name: Romans
   "romans": "Romans", "rom": "Romans", "ro": "Romans", "rm": "Romans",
-  // Canonical Name: 1 Corinthians
   "1 corinthians": "1 Corinthians", "1corinthians": "1 Corinthians", "1cor": "1 Corinthians", "1co": "1 Corinthians", "1 cor": "1 Corinthians", "i corinthians": "1 Corinthians", "i cor": "1 Corinthians", "first corinthians": "1 Corinthians",
-  // Canonical Name: 2 Corinthians
   "2 corinthians": "2 Corinthians", "2corinthians": "2 Corinthians", "2cor": "2 Corinthians", "2co": "2 Corinthians", "2 cor": "2 Corinthians", "ii corinthians": "2 Corinthians", "ii cor": "2 Corinthians", "second corinthians": "2 Corinthians",
-  // Canonical Name: Galatians
   "galatians": "Galatians", "gal": "Galatians", "ga": "Galatians",
-  // Canonical Name: Ephesians
   "ephesians": "Ephesians", "eph": "Ephesians", "ephes": "Ephesians", "ep": "Ephesians",
-  // Canonical Name: Philippians
   "philippians": "Philippians", "phil": "Philippians", "php": "Philippians", "ph": "Philippians", "philip": "Philippians", "phlp": "Philippians",
-  // Canonical Name: Colossians
   "colossians": "Colossians", "col": "Colossians", "co": "Colossians",
-  // Canonical Name: 1 Thessalonians
   "1 thessalonians": "1 Thessalonians", "1thessalonians": "1 Thessalonians", "1thess": "1 Thessalonians", "1thes": "1 Thessalonians", "1th": "1 Thessalonians", "i thessalonians": "1 Thessalonians", "i thess": "1 Thessalonians", "first thessalonians": "1 Thessalonians",
-  // Canonical Name: 2 Thessalonians
   "2 thessalonians": "2 Thessalonians", "2thessalonians": "2 Thessalonians", "2thess": "2 Thessalonians", "2thes": "2 Thessalonians", "2th": "2 Thessalonians", "ii thessalonians": "2 Thessalonians", "ii thess": "2 Thessalonians", "second thessalonians": "2 Thessalonians",
-  // Canonical Name: 1 Timothy
   "1 timothy": "1 Timothy", "1timothy": "1 Timothy", "1tim": "1 Timothy", "1ti": "1 Timothy", "i timothy": "1 Timothy", "i tim": "1 Timothy", "first timothy": "1 Timothy",
-  // Canonical Name: 2 Timothy
   "2 timothy": "2 Timothy", "2timothy": "2 Timothy", "2tim": "2 Timothy", "2ti": "2 Timothy", "ii timothy": "2 Timothy", "ii tim": "2 Timothy", "second timothy": "2 Timothy",
-  // Canonical Name: Titus
   "titus": "Titus", "tit": "Titus", "ti": "Titus",
-  // Canonical Name: Philemon
   "philemon": "Philemon", "philem": "Philemon", "phm": "Philemon", "phn": "Philemon", "phlm": "Philemon",
-  // Canonical Name: Hebrews
   "hebrews": "Hebrews", "heb": "Hebrews", "he": "Hebrews",
-  // Canonical Name: James
   "james": "James", "jas": "James", "ja": "James", "jm": "James",
-  // Canonical Name: 1 Peter
   "1 peter": "1 Peter", "1peter": "1 Peter", "1pet": "1 Peter", "1pe": "1 Peter", "1pt": "1 Peter", "i peter": "1 Peter", "i pet": "1 Peter", "first peter": "1 Peter",
-  // Canonical Name: 2 Peter
   "2 peter": "2 Peter", "2peter": "2 Peter", "2pet": "2 Peter", "2pe": "2 Peter", "2pt": "2 Peter", "ii peter": "2 Peter", "ii pet": "2 Peter", "second peter": "2 Peter",
-  // Canonical Name: 1 John
   "1 john": "1 John", "1john": "1 John", "1joh": "1 John", "1jn": "1 John", "1jhn": "1 John", "i john": "1 John", "first john": "1 John",
-  // Canonical Name: 2 John
   "2 john": "2 John", "2john": "2 John", "2joh": "2 John", "2jn": "2 John", "2jhn": "2 John", "ii john": "2 John", "second john": "2 John",
-  // Canonical Name: 3 John
   "3 john": "3 John", "3john": "3 John", "3joh": "3 John", "3jn": "3 John", "3jhn": "3 John", "iii john": "3 John", "third john": "3 John",
-  // Canonical Name: Jude
   "jude": "Jude", "jud": "Jude", "jd": "Jude",
-  // Canonical Name: Revelation
-  "revelation": "Revelation", "rev": "Revelation", "re": "Revelation", "apocalypse": "Revelation", "apoc": "Revelation", "revelations": "Revelation" // Common typo
+  "revelation": "Revelation", "rev": "Revelation", "re": "Revelation", "apocalypse": "Revelation", "apoc": "Revelation", "revelations": "Revelation"
 };
-console.log('[PSI_DEBUG] content.js: bookMap defined with extended keys.');
 
 const SINGLE_CHAPTER_BOOKS = new Set(['Obadiah', 'Philemon', '2 John', '3 John', 'Jude']);
 
-// Levenshtein Distance function
+// ──────────────────────────────────────────────
+// API constants & OSIS mapping (moved from injectedPopup.js)
+// ──────────────────────────────────────────────
+
+const API_BASE_URLS = {
+    ESV: 'https://api.esv.org/v3/passage/text/',
+    SCRIPTURE_BIBLE: 'https://api.scripture.api.bible/v1/bibles/',
+    BIBLE_API_COM: 'https://bible-api.com/',
+    CDN: 'https://raw.githubusercontent.com/wldeh/bible-api/main/bibles/'
+};
+
+const osisBookMap = {
+    "Genesis": "GEN", "Exodus": "EXO", "Leviticus": "LEV", "Numbers": "NUM", "Deuteronomy": "DEU",
+    "Joshua": "JOS", "Judges": "JDG", "Ruth": "RUT", "1 Samuel": "1SA", "2 Samuel": "2SA",
+    "1 Kings": "1KI", "2 Kings": "2KI", "1 Chronicles": "1CH", "2 Chronicles": "2CH", "Ezra": "EZR",
+    "Nehemiah": "NEH", "Esther": "EST", "Job": "JOB", "Psalms": "PSA", "Proverbs": "PRO",
+    "Ecclesiastes": "ECC", "Song of Solomon": "SNG", "Isaiah": "ISA", "Jeremiah": "JER",
+    "Lamentations": "LAM", "Ezekiel": "EZK", "Daniel": "DAN", "Hosea": "HOS", "Joel": "JOL",
+    "Amos": "AMO", "Obadiah": "OBA", "Jonah": "JON", "Micah": "MIC", "Nahum": "NAM",
+    "Habakkuk": "HAB", "Zephaniah": "ZEP", "Haggai": "HAG", "Zechariah": "ZEC", "Malachi": "MAL",
+    "Matthew": "MAT", "Mark": "MRK", "Luke": "LUK", "John": "JHN", "Acts": "ACT", "Romans": "ROM",
+    "1 Corinthians": "1CO", "2 Corinthians": "2CO", "Galatians": "GAL", "Ephesians": "EPH",
+    "Philippians": "PHP", "Colossians": "COL", "1 Thessalonians": "1TH", "2 Thessalonians": "2TH",
+    "1 Timothy": "1TI", "2 Timothy": "2TI", "Titus": "TIT", "Philemon": "PHM", "Hebrews": "HEB",
+    "James": "JAS", "1 Peter": "1PE", "2 Peter": "2PE", "1 John": "1JN", "2 John": "2JN",
+    "3 John": "3JN", "Jude": "JUD", "Revelation": "REV"
+};
+
+const bibleGatewayVersionMap = {
+    "esv": "ESV", "kjv": "KJV", "web": "WEB", "asv": "ASV",
+    "nkjv": "NKJV", "nasb": "NASB1995"
+};
+
+// ──────────────────────────────────────────────
+// Levenshtein Distance
+// ──────────────────────────────────────────────
+
 function levenshteinDistance(a, b) {
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
     const matrix = [];
-    for (let i = 0; i <= b.length; i++) {
-        matrix[i] = [i];
-    }
-    for (let j = 0; j <= a.length; j++) {
-        matrix[0][j] = j;
-    }
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
     for (let i = 1; i <= b.length; i++) {
         for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1).toLowerCase() === a.charAt(j - 1).toLowerCase()) { // Case-insensitive comparison
+            if (b.charAt(i - 1).toLowerCase() === a.charAt(j - 1).toLowerCase()) {
                 matrix[i][j] = matrix[i - 1][j - 1];
-  } else {
+            } else {
                 matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1, 
-                    matrix[i][j - 1] + 1,     
-                    matrix[i - 1][j] + 1      
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
                 );
             }
         }
@@ -195,8 +165,11 @@ function levenshteinDistance(a, b) {
     return matrix[b.length][a.length];
 }
 
+// ──────────────────────────────────────────────
+// Reference parser
+// ──────────────────────────────────────────────
+
 function parseReference(text) {
-    console.log('[SVP_DEBUG] content.js: parseReference IN (Iteration 9):', text);
     if (!text || typeof text !== 'string' || text.length < 2) return null;
 
     const originalText = text;
@@ -215,42 +188,31 @@ function parseReference(text) {
     const sortedBookMapKeys = Object.keys(bookMap).sort((a, b) => b.length - a.length);
 
     for (const mapKey of sortedBookMapKeys) {
-        // mapKey is a key from bookMap, e.g., "1 sam", "john", "rev", "psalm"
-        const bookRegex = new RegExp("^" + escapeRegExp(mapKey) + "(?:\\.(?!\\d)|\\b|$)", "i"); 
+        const bookRegex = new RegExp("^" + escapeRegExp(mapKey) + "(?:\\.(?!\\d)|\\b|$)", "i");
         const bookMatch = normalizedText.match(bookRegex);
-
         if (bookMatch) {
             rawBookNameFromMatch = bookMatch[0];
-            // CRITICAL: mapKey is the key from bookMap. Its value in bookMap IS the canonical name.
-            canonicalBookName = bookMap[mapKey]; 
-            
+            canonicalBookName = bookMap[mapKey];
             if (!canonicalBookName) {
-                 // This case should be extremely rare if mapKey is valid and bookMap is structured correctly.
-                 console.error(`[SVP_CRITICAL_ERROR] parseReference: Canonical name not found for mapKey '${mapKey}' which IS a key in bookMap. This indicates a fundamental issue.`);
-                 canonicalBookName = rawBookNameFromMatch.trim().replace(/[.]+$/, ''); // Desperate fallback
+                canonicalBookName = rawBookNameFromMatch.trim().replace(/[.]+$/, '');
             }
-            
             chapterVersePart = normalizedText.substring(rawBookNameFromMatch.length).trim();
-            chapterVersePart = chapterVersePart.replace(/^[\s.:vV]+/, '').trim(); 
-            chapterVersePart = chapterVersePart.replace(/[.,;:!?)]+$/, '').trim(); 
-
-            console.log(`[SVP_DEBUG] parseReference: Direct book match: '${rawBookNameFromMatch}' (using mapKey '${mapKey}') -> '${canonicalBookName}'. Remainder: '${chapterVersePart}'`);
+            chapterVersePart = chapterVersePart.replace(/^[\s.:vV]+/, '').trim();
+            chapterVersePart = chapterVersePart.replace(/[.,;:!?)]+$/, '').trim();
             break;
         }
     }
 
     if (!canonicalBookName) {
-        // Fallback Levenshtein only if no direct key match
         const potentialBookRegex = /^([1-3]?\s*[a-zA-Z]+(?:\s+[a-zA-Z]+)*[.]?)/i;
         const potentialBookMatch = normalizedText.match(potentialBookRegex);
-        if (potentialBookMatch && potentialBookMatch[0].length >=2) {
+        if (potentialBookMatch && potentialBookMatch[0].length >= 2) {
             rawBookNameFromMatch = potentialBookMatch[0].trim().replace(/[.]+$/, '');
             const keyToLookup = rawBookNameFromMatch.toLowerCase().replace(/[\s.]+/g, '');
-            if (keyToLookup.length < 2 && !bookMap[keyToLookup]) {
-                 console.warn(`[SVP_WARN] parseReference: Fuzzy match skipped for very short candidate: '${rawBookNameFromMatch}'`);
-                 return null;
-            }
-            let bestFuzzyMatch = null;            let minDistance = LEVENSHTEIN_BOOK_MATCH_THRESHOLD + 1;            let numBestMatches = 0;
+            if (keyToLookup.length < 2 && !bookMap[keyToLookup]) return null;
+            let bestFuzzyMatch = null;
+            let minDistance = LEVENSHTEIN_BOOK_MATCH_THRESHOLD + 1;
+            let numBestMatches = 0;
             for (const mapKey of sortedBookMapKeys) {
                 const normalizedMapKeyFromFile = mapKey.toLowerCase().replace(/[\s.]+/g, '');
                 const distance = levenshteinDistance(keyToLookup, normalizedMapKeyFromFile);
@@ -260,28 +222,21 @@ function parseReference(text) {
             }
             if (bestFuzzyMatch && numBestMatches === 1) {
                 canonicalBookName = bestFuzzyMatch;
-                chapterVersePart = normalizedText.substring(rawBookNameFromMatch.length).trim(); 
-                chapterVersePart = chapterVersePart.replace(/^[\s.:vV]+/, '').trim(); 
+                chapterVersePart = normalizedText.substring(rawBookNameFromMatch.length).trim();
+                chapterVersePart = chapterVersePart.replace(/^[\s.:vV]+/, '').trim();
                 chapterVersePart = chapterVersePart.replace(/[.,;:!?)]+$/, '').trim();
-                console.log(`[SVP_INFO] parseReference: Fuzzy matched book: '${rawBookNameFromMatch}' -> '${canonicalBookName}' (dist: ${minDistance}). Remainder: '${chapterVersePart}'`);
             } else {
-                console.warn(`[SVP_WARN] parseReference: No unambiguous fuzzy for '${normalizedText}' (tried: '${rawBookNameFromMatch}').`);
                 return null;
             }
         } else {
-            console.warn(`[SVP_WARN] parseReference: No book pattern for fuzzy in '${normalizedText}'.`);
             return null;
         }
     }
-    
+
     if (chapterVersePart === '' && canonicalBookName) {
-        console.log(`[SVP_DEBUG] parseReference: Only book '${canonicalBookName}'. Assuming Ch 1.`);
         chapterVersePart = '1';
     }
-    if (!chapterVersePart) {
-        console.warn(`[SVP_WARN] parseReference: No chapter/verse part for book '${canonicalBookName}'. Orig: '${originalText}'`);
-        return null; 
-    }
+    if (!chapterVersePart) return null;
 
     const result = { book: canonicalBookName, chapter: 0, startVerse: 1, endChapter: 0, endVerse: null };
     const cvPatterns = [
@@ -297,7 +252,6 @@ function parseReference(text) {
     for (const pattern of cvPatterns) {
         const cvMatch = chapterVersePart.match(pattern.regex);
         if (cvMatch) {
-            console.log(`[SVP_DEBUG] parseReference: Matched C:V pattern '${pattern.type}':`, cvMatch, "on part: ", chapterVersePart);
             result.chapter = parseInt(cvMatch[1], 10);
             switch (pattern.type) {
                 case 'Ch:Vs-Ch:Vs': result.startVerse = parseInt(cvMatch[2], 10); result.endChapter = parseInt(cvMatch[3], 10); result.endVerse = parseInt(cvMatch[4], 10); break;
@@ -312,315 +266,648 @@ function parseReference(text) {
             break;
         }
     }
-    if (!matchedCv) { console.warn(`[SVP_WARN] parseReference: No C:V pattern matched for part '${chapterVersePart}' (book: '${canonicalBookName}')`); return null; }
+    if (!matchedCv) return null;
 
     if (SINGLE_CHAPTER_BOOKS.has(result.book)) {
         if (matchedPatternType === 'Ch-Only') {
             const verseNumber = parseInt(matchedCapture[1], 10);
             if (!Number.isNaN(verseNumber) && verseNumber > 0) {
-                result.chapter = 1;
-                result.startVerse = verseNumber;
-                result.endChapter = 1;
-                result.endVerse = verseNumber;
+                result.chapter = 1; result.startVerse = verseNumber; result.endChapter = 1; result.endVerse = verseNumber;
             }
         } else if (matchedPatternType === 'Ch-Ch') {
             const startVerse = parseInt(matchedCapture[1], 10);
             const endVerse = parseInt(matchedCapture[2], 10);
-            result.chapter = 1;
-            result.endChapter = 1;
-            if (!Number.isNaN(startVerse) && startVerse > 0) {
-                result.startVerse = startVerse;
-            }
-            if (!Number.isNaN(endVerse) && endVerse > 0) {
-                result.endVerse = endVerse;
-            } else {
-                result.endVerse = null;
-            }
+            result.chapter = 1; result.endChapter = 1;
+            if (!Number.isNaN(startVerse) && startVerse > 0) result.startVerse = startVerse;
+            if (!Number.isNaN(endVerse) && endVerse > 0) result.endVerse = endVerse;
+            else result.endVerse = null;
         }
     }
 
-    if (isNaN(result.chapter) || result.chapter <= 0) { console.warn('[SVP_WARN] Invalid chapter', result); return null; }
-    if (isNaN(result.startVerse) || result.startVerse <= 0) { result.startVerse = 1; }
+    if (isNaN(result.chapter) || result.chapter <= 0) return null;
+    if (isNaN(result.startVerse) || result.startVerse <= 0) result.startVerse = 1;
     result.endChapter = (result.endChapter === 0 || isNaN(result.endChapter)) ? result.chapter : result.endChapter;
-    if (result.endChapter < result.chapter) { console.warn('[SVP_WARN] End chapter < start', result); return null; }
+    if (result.endChapter < result.chapter) return null;
     if (result.endVerse !== null) {
-        if (isNaN(result.endVerse) || result.endVerse < 0) { result.endVerse = result.startVerse;}
-        if (result.chapter === result.endChapter && result.endVerse < result.startVerse) { console.warn('[SVP_WARN] End verse < start verse in same chapter', result); return null; }
+        if (isNaN(result.endVerse) || result.endVerse < 0) result.endVerse = result.startVerse;
+        if (result.chapter === result.endChapter && result.endVerse < result.startVerse) return null;
     }
     if (result.endVerse === 0 && result.startVerse !== 0) result.endVerse = null;
 
-    console.log('[SVP_DEBUG] content.js: parseReference OUT (Iteration 9):', JSON.parse(JSON.stringify(result)));
     return result;
 }
 
-function removePopup(event) {
-    // If event exists, and popup exists, and the event's target is INSIDE the popup,
-    // then this mousedown event (which this listener is for) should be ignored by this global remover.
-    // The injected script and its internal elements should handle their own click/mousedown events.
-    if (event && popup && popup.contains(event.target)) {
-        console.log('[SVP_DEBUG] content.js: removePopup (mousedown listener) - mousedown originated INSIDE popup. Target:', event.target, 'Ignoring.');
-        return; // Do not proceed to remove the popup
-    }
+// ──────────────────────────────────────────────
+// Popup removal
+// ──────────────────────────────────────────────
 
-    console.log('[SVP_DEBUG] content.js: removePopup (window listener) called. Event target:', event ? event.target : 'No event');
-    
-    // Only proceed to remove if the popup actually exists.
-  if (popup) {
-        // This condition covers forced removal (event is null) 
-        // OR if the event occurred and its target was NOT inside the popup.
-        // No explicit check for event outside is needed here if the above block already returned for inside events.
-        console.log('[SVP_DEBUG] content.js: removePopup: Conditions met for removal (forced, or event outside). Removing actual popup DOM element.');
-            const LILogicInjector = document.getElementById('svp-logic-injector');
-            if (LILogicInjector) LILogicInjector.remove();
-    popup.remove();
-    popup = null;
-            window.removeEventListener("mousedown", removePopup, true); // Remove self
+function removePopup(event) {
+    if (event && popup && popup.contains(event.target)) return;
+    if (popup) {
+        popup.remove();
+        popup = null;
+        currentSelectionRefs = null;
+        window.removeEventListener("mousedown", removePopup, true);
     }
 }
 
+// ──────────────────────────────────────────────
+// Bible data loader
+// ──────────────────────────────────────────────
+
 let biblesData = null;
 let biblesDataPromise = null;
+
 function ensureBiblesData() {
-    console.log('[PSI-FIXED_DEBUG] content.js: ensureBiblesData CALLED.');
-    if (biblesData) {
-        console.log('[PSI_DEBUG] content.js: ensureBiblesData: biblesData already loaded.');
-        return Promise.resolve(biblesData);
-    }
-    if (biblesDataPromise) {
-        console.log('[PSI_DEBUG] content.js: ensureBiblesData: biblesDataPromise exists.');
-        return biblesDataPromise;
-    }
-    console.log('[PSI_DEBUG] content.js: ensureBiblesData: Fetching bibles.json');
+    if (biblesData) return Promise.resolve(biblesData);
+    if (biblesDataPromise) return biblesDataPromise;
     biblesDataPromise = fetch(chrome.runtime.getURL('bibles.json'))
         .then(response => {
-            console.log('[PSI_DEBUG] content.js: fetch bibles.json - status:', response.status);
-            if (!response.ok) {
-                console.error('[PSI_DEBUG] content.js: fetch bibles.json - Network error.', response);
-                throw new Error(`HTTP error ${response.status} for bibles.json`);
-            }
+            if (!response.ok) throw new Error(`HTTP error ${response.status} for bibles.json`);
             return response.json();
         })
         .then(data => {
             biblesData = data;
-            console.log("[PSI_DEBUG] content.js: bibles.json loaded:", JSON.parse(JSON.stringify(biblesData)));
             biblesDataPromise = null;
             return biblesData;
         })
         .catch(err => {
-            console.error('[PSI_DEBUG] content.js: CRITICAL - Failed to load bibles.json.', err);
-            biblesData = { "ESV": { "display": "ESV (Fallback)", "api_code": "ESV", "api_id": "esv", "api": "esv.org", "apiKey": "__ESV_API_KEY_PLACEHOLDER__" } }; // Ensure placeholder for fallback
-            console.warn('[PSI_DEBUG] content.js: Using fallback biblesData.');
+            console.error('[SVP] Failed to load bibles.json.', err);
+            biblesData = { "esv": { "displayName": "ESV (Fallback)", "apiType": "esv_org", "apiKey": "__ESV_API_KEY_PLACEHOLDER__" } };
             biblesDataPromise = null;
             return biblesData;
         });
     return biblesDataPromise;
 }
 
-console.log('[PSI_DEBUG] content.js: All functions defined. Adding event listeners.');
+// ──────────────────────────────────────────────
+// Fetch with timeout (runs in content script context — has host_permissions)
+// ──────────────────────────────────────────────
 
-// Define the core mouseup logic as a separate async function
-async function handleTextSelectionEvent(event) {
-    console.log('[PSI_STABLE_DEBUG] content.js: (Debounced) MOUSEUP LOGIC TRIGGERED.');
+async function fetchWithTimeout(resourceUrl, options = {}, timeout = FETCH_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    options.signal = controller.signal;
+    try {
+        const response = await fetch(resourceUrl, options);
+        clearTimeout(id);
+        if (!response.ok) {
+            let errorText = response.statusText;
+            try {
+                const errorData = await response.clone().json();
+                if (errorData && errorData.detail) errorText = errorData.detail;
+                else if (errorData && errorData.error) errorText = errorData.error;
+            } catch (_) { /* body wasn't JSON */ }
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error(`Timeout: Request to ${new URL(resourceUrl).hostname} exceeded ${timeout / 1000}s`);
+        }
+        throw error;
+    }
+}
 
-    // If the popup exists AND the click (mouseup) originated from within the popup, do nothing.
-    // This check was added in a previous iteration and is important.
-    if (popup && popup.contains(event.target)) {
-        console.log('[SVP_DEBUG] content.js: Mouseup event originated inside the popup. Ignoring for new popup creation.');
-        return;
+async function fetchChapterFromCdn(translationInfo, bookCanonicalName, chap) {
+    const cdnId = translationInfo.id || translationInfo.api_id;
+    const apiBookId = (translationInfo.bookIdMap && translationInfo.bookIdMap[bookCanonicalName]) || bookCanonicalName.toLowerCase().replace(/\s+/g, '');
+    const url = `${API_BASE_URLS.CDN}${cdnId}/books/${apiBookId}/chapters/${chap}.json`;
+    const response = await fetchWithTimeout(url);
+    const data = await response.json();
+    if (data.verses && data.verses.length > 0) return data.verses.map(v => `<sup>${v.verse}</sup>${v.text.trim()}`).join(" ");
+    throw new Error(`Ch.${chap} data malformed/empty(CDN)`);
+}
+
+// ──────────────────────────────────────────────
+// Verse fetcher (all API strategies)
+// ──────────────────────────────────────────────
+
+async function fetchVerses(refDetails, translationCode, currentBiblesData, userKeys, optionsPageUrl) {
+    const { book, chapter: startChapter, startVerse, endChapter, endVerse } = refDetails;
+    const translationInfo = currentBiblesData[translationCode];
+    if (!translationInfo) return `<em class="svp-error-message">Translation '${translationCode}' not configured.</em>`;
+
+    let apiKeyForCall = translationInfo.apiKey;
+    const currentApiType = translationInfo.apiType || translationInfo.api;
+    const osisBook = osisBookMap[book];
+
+    if ((currentApiType === 'esv_org' || currentApiType === 'esv.org') && userKeys.esvApiKey) {
+        apiKeyForCall = userKeys.esvApiKey;
+    } else if (currentApiType === 'scripture_api_bible' && userKeys.bibleApiKey) {
+        apiKeyForCall = userKeys.bibleApiKey;
     }
 
-    if (event.button !== 0) return; // Only process left-clicks
-  const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-        let targetNode = sel.anchorNode;
-        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) targetNode = targetNode.parentNode;
-        if (targetNode && (targetNode.isContentEditable || targetNode.closest('input, textarea, [contenteditable="true"], [role="textbox"]'))) return;
-        let selectionText = sel.toString().trim();
+    const keyRequiredApiTypes = ['esv.org', 'esv_org', 'scripture_api_bible'];
+    if (keyRequiredApiTypes.includes(currentApiType) && (!apiKeyForCall || apiKeyForCall.includes('_PLACEHOLDER__'))) {
+        const errorLink = optionsPageUrl && optionsPageUrl.startsWith('chrome-extension://')
+            ? `<a href="${optionsPageUrl}" target="_blank" style="color: inherit; text-decoration: underline;">extension options</a>`
+            : 'extension options';
+        return `<em class="svp-error-message">${translationInfo.displayName || translationCode.toUpperCase()} requires an API key. Please set it in the ${errorLink}.</em>`;
+    }
+    if (currentApiType === 'scripture_api_bible' && (!translationInfo.bibleId || translationInfo.bibleId.includes('VERIFY_'))) {
+        return `<em class="svp-error-message">Bible ID for ${translationInfo.displayName} not configured. Check setup.</em>`;
+    }
+
+    // Build display string
+    let passageDisplayString = `${book} ${startChapter}`;
+    if (startVerse > 1 || (endVerse !== null && endVerse !== startVerse) || endChapter !== startChapter || (endVerse === null && startVerse > 1)) {
+        passageDisplayString += `:${startVerse}`;
+    }
+    if (endChapter !== startChapter) {
+        passageDisplayString += `-${endChapter}`;
+        if (endVerse !== null && endVerse > 0 && !(endVerse === 1 && startVerse === 1 && endChapter !== startChapter)) {
+            passageDisplayString += `:${endVerse}`;
+        }
+    } else if (endVerse !== null && endVerse !== startVerse) {
+        passageDisplayString += `-${endVerse}`;
+    }
+    const passageRefDisplay = `<strong class="svp-reference-title">${passageDisplayString} (${translationInfo.displayName || translationCode.toUpperCase()})</strong><br>`;
+
+    let fetchedPassageHtml = '';
+    let url = '';
+
+    try {
+        switch (currentApiType) {
+            case 'esv.org': case 'esv_org': {
+                let esvQuery = `${book} ${startChapter}`;
+                if (startVerse === 1 && endVerse === null && startChapter === endChapter) { /* full chapter */ }
+                else if (startVerse === 1 && endVerse === null && startChapter !== endChapter) { esvQuery += `-${endChapter}`; }
+                else {
+                    esvQuery += `:${startVerse}`;
+                    if (endChapter !== startChapter) esvQuery += `-${endChapter}${endVerse !== null ? ':' + endVerse : ''}`;
+                    else if (endVerse !== null && endVerse !== startVerse) esvQuery += `-${endVerse}`;
+                }
+                url = `${API_BASE_URLS.ESV}?q=${encodeURIComponent(esvQuery)}&include-headings=false&include-footnotes=false&include-verse-numbers=true&include-passage-references=false`;
+                const esvResponse = await fetchWithTimeout(url, { headers: { 'Authorization': `Token ${apiKeyForCall}` } });
+                const esvData = await esvResponse.json();
+                fetchedPassageHtml = esvData.passages && esvData.passages.length > 0
+                    ? `<span class="svp-passage-text">${esvData.passages[0].trim()}</span>`
+                    : '<em class="svp-error-message">Passage not found (ESV).</em>';
+                break;
+            }
+            case 'bible-api.com': {
+                let baQuery = `${book} ${startChapter}`;
+                if (!(startVerse === 1 && endVerse === null && startChapter === endChapter)) baQuery += `:${startVerse}`;
+                if (endChapter !== startChapter) baQuery += `-${endChapter}${endVerse !== null ? ':' + endVerse : ''}`;
+                else if (endVerse !== null && endVerse !== startVerse) baQuery += `-${endVerse}`;
+                url = `${API_BASE_URLS.BIBLE_API_COM}${encodeURIComponent(baQuery)}?translation=${translationInfo.api_id || translationCode.toLowerCase()}`;
+                const baResponse = await fetchWithTimeout(url);
+                const baData = await baResponse.json();
+                if (baData.verses) fetchedPassageHtml = `<span class="svp-passage-text">${baData.verses.map(v => `<sup>${v.verse}</sup>${v.text.trim()}`).join(' ')}</span>`;
+                else if (baData.text) fetchedPassageHtml = `<span class="svp-passage-text">${baData.text.trim()}</span>`;
+                else throw new Error(baData.error || 'Passage not found (bible-api.com).');
+                break;
+            }
+            case 'wldeh_cdn': {
+                let cdnHtmlSegments = [];
+                const finalCdnChap = endChapter || startChapter;
+                for (let c = startChapter; c <= finalCdnChap; c++) {
+                    if (cdnHtmlSegments.length > 0) cdnHtmlSegments.push('<hr />');
+                    let chapPrefix = (startChapter !== finalCdnChap) ? `<h3>Chapter ${c}</h3>` : "";
+                    try {
+                        const chapterContentHtml = await fetchChapterFromCdn(translationInfo, book, c);
+                        cdnHtmlSegments.push(chapPrefix + `<span class="svp-passage-text">${chapterContentHtml}</span>`);
+                    } catch (e) {
+                        cdnHtmlSegments.push(chapPrefix + `<em class="svp-error-message">Error loading Ch. ${c}: ${e.message}</em>`);
+                    }
+                }
+                fetchedPassageHtml = cdnHtmlSegments.join('');
+                if (!fetchedPassageHtml) fetchedPassageHtml = '<em class="svp-error-message">Could not load passage from CDN.</em>';
+                break;
+            }
+            case 'scripture_api_bible': {
+                if (!osisBook) throw new Error(`OSIS book code not found for: ${book}`);
+                let passageId = `${osisBook}.${startChapter}`;
+                if (startVerse === 1 && endVerse === null && startChapter === endChapter) { /* full chapter */ }
+                else if (startVerse === 1 && endVerse === null && startChapter !== endChapter) { passageId += `-${osisBook}.${endChapter}`; }
+                else {
+                    passageId += `.${startVerse}`;
+                    if (endChapter !== startChapter) passageId += `-${osisBook}.${endChapter}${endVerse !== null ? '.' + endVerse : '.1'}`;
+                    else if (endVerse !== null && endVerse !== startVerse) passageId += `-${osisBook}.${startChapter}.${endVerse}`;
+                }
+                url = `${API_BASE_URLS.SCRIPTURE_BIBLE}${translationInfo.bibleId}/passages/${encodeURIComponent(passageId)}?content-type=html&include-notes=false&include-titles=true&include-chapter-numbers=false&include-verse-numbers=true&include-verse-spans=true`;
+                const sabResponse = await fetchWithTimeout(url, { headers: { 'api-key': apiKeyForCall } });
+                const sabData = await sabResponse.json();
+                fetchedPassageHtml = sabData.data && sabData.data.content
+                    ? `<span class="svp-passage-text">${sabData.data.content.trim()}</span>`
+                    : '<em class="svp-error-message">Passage not found (API.Bible).</em>';
+                break;
+            }
+            default:
+                throw new Error(`Unsupported API type: ${currentApiType}`);
+        }
+        return passageRefDisplay + fetchedPassageHtml;
+    } catch (err) {
+        console.error('[SVP] Fetching verse content failed:', err.message);
+        let errorMsg = err.message || 'Unknown error fetching passage.';
+        if (err.message && (err.message.includes('HTTP 401') || err.message.includes('HTTP 403'))) {
+            const errorLink = (optionsPageUrl && optionsPageUrl.startsWith('chrome-extension://'))
+                ? `<a href="${optionsPageUrl}" target="_blank" style="color: inherit; text-decoration: underline;">extension options</a>`
+                : 'extension options';
+            errorMsg = `Access Denied. Check API key for ${translationInfo.displayName || translationCode.toUpperCase()} in ${errorLink}.`;
+        } else if (err.message && err.message.includes('HTTP 404')) {
+            errorMsg = `Passage not found for ${translationInfo.displayName || translationCode.toUpperCase()}. (404)`;
+        } else if (errorMsg.length > 150) {
+            errorMsg = 'Error retrieving data. (see console)';
+        }
+        return passageRefDisplay + `<em class="svp-error-message">${errorMsg}</em>`;
+    }
+}
+
+// ──────────────────────────────────────────────
+// Popup theming (dark/light)
+// ──────────────────────────────────────────────
+
+function applyPopupTheme(popupEl, translationSelectEl, actionsContainerEl, copyBtn, linkBtn, contentDivEl) {
+    if (!popupEl) return;
+    const isDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    const bg       = isDark ? '#2f3136' : '#ffffff';
+    const fg       = isDark ? '#dcddde' : '#212529';
+    const border   = isDark ? '1px solid #202225' : '1px solid #e0e0e0';
+    const selBg    = isDark ? '#202225' : '#f8f9fa';
+    const selBorder= isDark ? '1px solid #40444b' : '1px solid #ced4da';
+    const btnBg    = isDark ? '#40444b' : '#e9ecef';
+    const btnFg    = isDark ? '#b9bbbe' : '#495057';
+    const btnBd    = isDark ? '#5c6370' : '#ced4da';
+    const emColor  = isDark ? '#a0a0a0' : '#5a5a5a';
+    const errColor = isDark ? '#ff9e9e' : '#c0392b';
+    const hdrColor = isDark ? '#e5c07b' : '#c94e50';
+
+    Object.assign(popupEl.style, {
+        fontFamily: 'Segoe UI, Roboto, Arial, sans-serif', fontSize: '14px', lineHeight: '1.6',
+        minWidth: '300px', maxWidth: '520px', maxHeight: '480px', overflowY: 'auto',
+        padding: '12px', borderRadius: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.2)',
+        background: bg, color: fg, border: border
+    });
+
+    if (translationSelectEl) Object.assign(translationSelectEl.style, {
+        fontSize: '12px', marginBottom: '8px', padding: '6px 10px', borderRadius: '4px',
+        width: 'auto', maxWidth: '180px', outline: 'none', float: 'right',
+        background: selBg, color: fg, border: selBorder
+    });
+
+    const styleBtn = (btn) => {
+        if (!btn) return;
+        Object.assign(btn.style, {
+            fontSize: '11px', fontWeight: '500', padding: '5px 10px', borderRadius: '4px',
+            cursor: 'pointer', textAlign: 'center', marginLeft: '8px', opacity: '0.85',
+            transition: 'opacity 0.2s, background-color 0.2s', background: btnBg, color: btnFg,
+            border: `1px solid ${btnBd}`
+        });
+        btn.onmouseover = () => { btn.style.opacity = '1'; btn.style.backgroundColor = isDark ? '#7289da' : '#007bff'; btn.style.color = '#fff'; };
+        btn.onmouseout  = () => { btn.style.opacity = '0.85'; btn.style.backgroundColor = btnBg; btn.style.color = btnFg; };
+    };
+    styleBtn(copyBtn);
+    styleBtn(linkBtn);
+
+    if (actionsContainerEl) Object.assign(actionsContainerEl.style, {
+        display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+        padding: '6px 0 0 0', marginBottom: '8px', clear: 'both'
+    });
+
+    if (contentDivEl) Object.assign(contentDivEl.style, { padding: '5px 2px', borderRadius: '4px', marginTop: '0', clear: 'both' });
+
+    // Style rendered content
+    if (contentDivEl) {
+        contentDivEl.querySelectorAll('span.svp-passage-text').forEach(el => Object.assign(el.style, { fontSize: '14px', lineHeight: '1.65' }));
+        contentDivEl.querySelectorAll('strong.svp-reference-title').forEach(el => Object.assign(el.style, { fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', display: 'block' }));
+        contentDivEl.querySelectorAll('em.svp-error-message').forEach(el => Object.assign(el.style, { fontStyle: 'italic', fontSize: '13px', color: errColor }));
+        contentDivEl.querySelectorAll('h3').forEach(h3 => Object.assign(h3.style, {
+            marginTop: '15px', marginBottom: '8px', fontSize: '1.05em', fontWeight: '600',
+            borderBottom: isDark ? '1px solid #4a4a4a' : '1px solid #dadce0', paddingBottom: '5px'
+        }));
+        contentDivEl.querySelectorAll('hr').forEach(hr => Object.assign(hr.style, { margin: '18px 0', border: '0', height: '1px', background: isDark ? '#4a4a4a' : '#dadce0' }));
+    }
+    popupEl.querySelectorAll('em:not(.svp-error-message)').forEach(em => { em.style.color = emColor; });
+    popupEl.querySelectorAll('strong:not(.svp-reference-title)').forEach(s => { s.style.color = hdrColor; });
+}
+
+// ──────────────────────────────────────────────
+// Popup positioning
+// ──────────────────────────────────────────────
+
+function adjustPopupPosition(popupEl, selectionRect) {
+    if (!popupEl || !selectionRect) return;
+    const popupRect = popupEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let newLeft = window.scrollX + selectionRect.left;
+    let newTop  = window.scrollY + selectionRect.bottom + POPUP_VIEWPORT_MARGIN;
+
+    if (newLeft + popupRect.width > window.scrollX + vw - POPUP_VIEWPORT_MARGIN) {
+        newLeft = window.scrollX + vw - popupRect.width - POPUP_VIEWPORT_MARGIN;
+    }
+    if (newLeft < window.scrollX + POPUP_VIEWPORT_MARGIN) newLeft = window.scrollX + POPUP_VIEWPORT_MARGIN;
+
+    if (newTop + popupRect.height > window.scrollY + vh - POPUP_VIEWPORT_MARGIN) {
+        if (popupRect.height <= selectionRect.top - POPUP_VIEWPORT_MARGIN) {
+            newTop = window.scrollY + selectionRect.top - popupRect.height - POPUP_VIEWPORT_MARGIN;
+        } else {
+            newTop = window.scrollY + vh - popupRect.height - POPUP_VIEWPORT_MARGIN;
+            if (newTop < window.scrollY + POPUP_VIEWPORT_MARGIN) newTop = window.scrollY + POPUP_VIEWPORT_MARGIN;
+        }
+    }
+    if (newTop < window.scrollY + POPUP_VIEWPORT_MARGIN) newTop = window.scrollY + POPUP_VIEWPORT_MARGIN;
+
+    popupEl.style.left = `${Math.max(0, newLeft)}px`;
+    popupEl.style.top  = `${Math.max(0, newTop)}px`;
+}
+
+// ──────────────────────────────────────────────
+// Build passage display string for headers / copy
+// ──────────────────────────────────────────────
+
+function buildRefDisplayString(ref) {
+    let s = `${ref.book} ${ref.chapter}`;
+    if (ref.startVerse > 1 || (ref.endVerse !== null && ref.endVerse !== ref.startVerse) || ref.endChapter !== ref.chapter || (ref.endVerse === null && ref.startVerse > 1)) {
+        s += `:${ref.startVerse}`;
+    }
+    if (ref.endChapter !== ref.chapter) {
+        s += `-${ref.endChapter}`;
+        if (ref.endVerse !== null && ref.endVerse > 0 && !(ref.endVerse === 1 && ref.startVerse === 1 && ref.endChapter !== ref.chapter)) {
+            s += `:${ref.endVerse}`;
+        }
+    } else if (ref.endVerse !== null && ref.endVerse !== ref.startVerse) {
+        s += `-${ref.endVerse}`;
+    }
+    return s;
+}
+
+// ──────────────────────────────────────────────
+// Main mouseup handler (creates popup, fetches & displays)
+// ──────────────────────────────────────────────
+
+async function handleTextSelectionEvent(event) {
+    // Ignore clicks inside existing popup
+    if (popup && popup.contains(event.target)) return;
+    if (event.button !== 0) return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+
+    let targetNode = sel.anchorNode;
+    if (targetNode && targetNode.nodeType === Node.TEXT_NODE) targetNode = targetNode.parentNode;
+    if (targetNode && (targetNode.isContentEditable || targetNode.closest('input, textarea, [contenteditable="true"], [role="textbox"]'))) return;
+
+    let selectionText = sel.toString().trim();
     if (!selectionText || selectionText.length < 3 || selectionText.length > 250) return;
-        
+
+    // Parse references (support comma / semicolon separated)
     const rawRefStrings = selectionText.split(/[,;]/);
     let refs = [];
-
     for (let str of rawRefStrings) {
         str = str.trim();
         if (!str) continue;
-
-        // Refined prefix stripping: More conservatively look for patterns like "Label: Ref"
         const prefixMatch = str.match(/^([A-Za-z\s()]+(?:\(.*?\))?):\s+(.+)$/);
         if (prefixMatch && prefixMatch[1] && prefixMatch[2]) {
-            // If the part after colon seems like a reference (e.g., starts with a digit or a book initial like 1 John)
-            if (prefixMatch[2].match(/^(?:\d|[1-3]\s?[A-Za-z])/i)) {
-                console.log(`[SVP_DEBUG] Stripped prefix '${prefixMatch[1]}: ', using '${prefixMatch[2]}' for parsing.`);
-                str = prefixMatch[2].trim();
-            } else {
-                 console.log(`[SVP_DEBUG] Prefix '${prefixMatch[1]}: ' found, but remainder '${prefixMatch[2]}' doesn\'t look like start of ref. Parsing original: '${str}'`);
-            }
+            if (prefixMatch[2].match(/^(?:\d|[1-3]\s?[A-Za-z])/i)) str = prefixMatch[2].trim();
         }
-
         const parsed = parseReference(str);
-        if (parsed) {
-            refs.push(parsed);
-        }
+        if (parsed) refs.push(parsed);
     }
-
     if (refs.length === 0) return;
 
-    // Call the already improved removePopup. 
-    // Pass null to indicate a forced removal before creating a new one.
-    removePopup(null); 
+    // Remove any existing popup (forced)
+    removePopup(null);
 
-        const currentBiblesData = await ensureBiblesData();
-        if (!currentBiblesData || Object.keys(currentBiblesData).length === 0) {
-            console.error("[PSI_STABLE_DEBUG] content.js: Bibles data not loaded or empty.");
-            return;
-        }
+    // Load bible config
+    const currentBiblesData = await ensureBiblesData();
+    if (!currentBiblesData || Object.keys(currentBiblesData).length === 0) return;
 
-        const range = sel.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const selectionRect = { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right, width: rect.width, height: rect.height };
     const optionsPageUrl = chrome.runtime.getURL('options.html');
 
-    // Fetch API keys, global default, AND last content translation from storage
-    const settingsFromStorage = await new Promise(resolve => {
-        chrome.storage.sync.get(
-            {
-                [STORAGE_KEY_USER_ESV_API_KEY]: '',
-                [STORAGE_KEY_USER_BIBLE_API_KEY]: '',
-                [STORAGE_KEY_USER_DEFAULT_TRANSLATION]: 'esv',
-                [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: null // Fetch this too
-            },
-            items => {
-                if (chrome.runtime.lastError) {
-                    console.error("[SVP_ERROR] content.js: Error fetching settings from storage:", chrome.runtime.lastError.message);
-                    resolve({ 
-                        userEsvApiKey: '', 
-                        userApiBibleApiKey: '', 
-                        userDefaultGlobalTranslation: 'esv', 
-                        lastSelectedTranslationContent: null 
-                    }); 
-                } else {
-                    resolve(items);
-                }
+    // Fetch user settings from chrome.storage (we're in content script context — this works)
+    const settings = await new Promise(resolve => {
+        chrome.storage.sync.get({
+            [STORAGE_KEY_USER_ESV_API_KEY]: '',
+            [STORAGE_KEY_USER_BIBLE_API_KEY]: '',
+            [STORAGE_KEY_USER_DEFAULT_TRANSLATION]: 'esv',
+            [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: null
+        }, items => {
+            if (chrome.runtime.lastError) {
+                resolve({ userEsvApiKey: '', userApiBibleApiKey: '', userDefaultGlobalTranslation: 'esv', lastSelectedTranslationContent: null });
+            } else {
+                resolve(items);
             }
-        );
+        });
     });
-    console.log('[SVP_DEBUG] content.js: Fetched settings from storage for payload:', settingsFromStorage);
+
+    const userKeys = {
+        esvApiKey: settings[STORAGE_KEY_USER_ESV_API_KEY],
+        bibleApiKey: settings[STORAGE_KEY_USER_BIBLE_API_KEY]
+    };
+
+    // ── Build popup DOM ──
 
     popup = document.createElement('div');
     popup.id = 'bible-popup-container';
     popup.setAttribute('data-verse-popup', 'true');
     Object.assign(popup.style, { position: 'absolute', zIndex: POPUP_Z_INDEX, left: '0px', top: '0px' });
-    popup.addEventListener('mousedown', e => e.stopPropagation()); // Keep this for interactions within popup
+    popup.addEventListener('mousedown', e => e.stopPropagation());
 
+    // Translation select
     const translationSelect = document.createElement('select');
     translationSelect.id = 'svp-translation-select';
-    Object.assign(translationSelect.style, { fontSize: '12px', marginBottom: '5px', padding: '3px', float: 'right' });
     Object.keys(currentBiblesData).forEach(code => {
         const opt = document.createElement('option');
         opt.value = code;
-        opt.textContent = currentBiblesData[code].display || currentBiblesData[code].displayName || code;
+        opt.textContent = currentBiblesData[code].displayName || currentBiblesData[code].display || code;
         translationSelect.appendChild(opt);
     });
     popup.appendChild(translationSelect);
 
-    const verseContentDiv = document.createElement('div');
-    verseContentDiv.id = 'svp-verse-content';
-    Object.assign(verseContentDiv.style, { marginTop: '28px', clear: 'both' });
-    verseContentDiv.innerHTML = '<em>Loading...</em>'; // This will be improved by injectedPopup.js
-    popup.appendChild(verseContentDiv);
+    // Actions container (Copy / Context buttons)
+    const actionsContainer = document.createElement('div');
+    actionsContainer.id = 'svp-actions-container';
+
+    const copyButton = document.createElement('button');
+    copyButton.id = 'svp-copy-button';
+    copyButton.textContent = 'Copy';
+    copyButton.title = 'Copy verse text';
+    actionsContainer.appendChild(copyButton);
+
+    const linkButton = document.createElement('button');
+    linkButton.id = 'svp-link-button';
+    linkButton.textContent = 'Context';
+    linkButton.title = 'View full chapter on Bible Gateway';
+    actionsContainer.appendChild(linkButton);
+
+    popup.appendChild(actionsContainer);
+
+    // Content area
+    const contentDiv = document.createElement('div');
+    contentDiv.id = 'svp-verse-content';
+    contentDiv.innerHTML = '<em>Loading...</em>';
+    popup.appendChild(contentDiv);
+
     document.body.appendChild(popup);
 
-    let popupTop = window.scrollY + rect.bottom + 8;
-    let popupLeft = window.scrollX + rect.left;
-    popup.style.top = `${popupTop}px`;
-    popup.style.left = `${popupLeft}px`;
-    console.log('[PSI_STABLE_DEBUG] content.js: Popup positioned (initial).');
+    // Position
+    popup.style.top  = `${window.scrollY + rect.bottom + 8}px`;
+    popup.style.left = `${window.scrollX + rect.left}px`;
 
-    const scriptDataPayload = { 
-        biblesData: currentBiblesData, 
-        initialRefs: refs, 
-        selectionRect: { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right, width: rect.width, height: rect.height },
-        optionsPageUrl: optionsPageUrl,
-        userEsvApiKey: settingsFromStorage[STORAGE_KEY_USER_ESV_API_KEY],
-        userApiBibleApiKey: settingsFromStorage[STORAGE_KEY_USER_BIBLE_API_KEY],
-        userDefaultGlobalTranslation: settingsFromStorage[STORAGE_KEY_USER_DEFAULT_TRANSLATION],
-        lastSelectedTranslationContent: settingsFromStorage[STORAGE_KEY_LAST_TRANSLATION_CONTENT] // Pass it
-    }; 
-    try {
-        popup.setAttribute('data-svp-payload', JSON.stringify(scriptDataPayload));
-    } catch (e) {
-        verseContentDiv.innerHTML = "<em>Error preparing data.</em>"; return;
+    // Apply theme immediately so the popup is visible
+    applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+
+    // ── Determine initial translation ──
+
+    let initialTranslation = 'esv';
+    const lastContent = settings[STORAGE_KEY_LAST_TRANSLATION_CONTENT];
+    const userDefault = settings[STORAGE_KEY_USER_DEFAULT_TRANSLATION];
+
+    const cssEsc = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape : (s => s.replace(/([^\w-])/g, '\\$1'));
+    if (lastContent && translationSelect.querySelector(`option[value="${cssEsc(lastContent)}"]`)) {
+        initialTranslation = lastContent;
+    } else if (userDefault && translationSelect.querySelector(`option[value="${cssEsc(userDefault)}"]`)) {
+        initialTranslation = userDefault;
+    } else if (translationSelect.options.length > 0) {
+        initialTranslation = translationSelect.options[0].value;
     }
-    
-    const scriptInject = document.createElement('script');
-    scriptInject.id = 'svp-logic-injector';
-    const injectedScriptURL = chrome.runtime.getURL('injectedPopup.js');
-    scriptInject.src = injectedScriptURL;
-    scriptInject.onload = () => console.log('[PSI_STABLE_DEBUG] content.js: injectedPopup.js LOADED.');
-    scriptInject.onerror = () => console.error('[PSI_STABLE_DEBUG] content.js: FAILED to load injectedPopup.js.');
-    (document.head || document.documentElement).appendChild(scriptInject);
+    translationSelect.value = initialTranslation;
 
-    // The mousedown listener for closing the popup is added by `removePopup` if event is null,
-    // or by the logic within `removePopup` if a click happens outside.
-    // We ensure it is set up after popup creation using this mechanism.
-    // The `setTimeout` used previously is still a reasonable way to ensure the listener is fresh for the new popup.
-    setTimeout(() => { 
-        // Remove any stray old listener first (defensive)
+    // ── Fetch and display ──
+
+    currentSelectionRefs = refs;
+
+    async function loadAndDisplay(translationCode) {
+        const transInfo = currentBiblesData[translationCode];
+        const transName = transInfo ? (transInfo.displayName || transInfo.display || translationCode.toUpperCase()) : translationCode.toUpperCase();
+        const loadingColor = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? '#a0a0a0' : '#5a5a5a';
+
+        let loadingMsg = refs.length === 1 ? `Loading ${buildRefDisplayString(refs[0])}...` : `Loading ${refs.length} references...`;
+        contentDiv.innerHTML = `<em style="color: ${loadingColor}; font-style: italic;">${loadingMsg} (${transName})</em>`;
+        applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+
+        let combinedHtml = '';
+        for (let i = 0; i < refs.length; i++) {
+            if (i > 0) combinedHtml += '<hr />';
+            combinedHtml += await fetchVerses(refs[i], translationCode, currentBiblesData, userKeys, optionsPageUrl);
+        }
+        contentDiv.innerHTML = combinedHtml;
+        applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+        adjustPopupPosition(popup, selectionRect);
+    }
+
+    await loadAndDisplay(translationSelect.value);
+
+    // ── Translation change handler ──
+
+    translationSelect.addEventListener('change', (e) => {
+        const newTranslation = e.target.value;
+        if (chrome.storage && chrome.storage.sync) {
+            chrome.storage.sync.set({ [STORAGE_KEY_LAST_TRANSLATION_CONTENT]: newTranslation });
+        }
+        loadAndDisplay(newTranslation);
+    });
+
+    // ── Copy button handler ──
+
+    copyButton.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentSelectionRefs || currentSelectionRefs.length === 0 || contentDiv.querySelector('.svp-error-message')) {
+            copyButton.textContent = 'Error!';
+            copyButton.style.backgroundColor = '#d9534f'; copyButton.style.color = 'white';
+            setTimeout(() => { copyButton.textContent = 'Copy'; applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv); }, 2000);
+            return;
+        }
+        let textToCopy = '';
+        currentSelectionRefs.forEach((ref, index) => {
+            if (index > 0) textToCopy += '\n\n---\n\n';
+            const transInfo = currentBiblesData[translationSelect.value];
+            const transName = transInfo ? (transInfo.displayName || transInfo.display || translationSelect.value.toUpperCase()) : translationSelect.value.toUpperCase();
+            textToCopy += `${buildRefDisplayString(ref)} (${transName})\n`;
+        });
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = contentDiv.innerHTML;
+        tempDiv.querySelectorAll('strong.svp-reference-title').forEach(el => el.remove());
+        tempDiv.querySelectorAll('sup').forEach(sup => sup.replaceWith(document.createTextNode(` v${sup.textContent} `)));
+        tempDiv.querySelectorAll('h3').forEach(h3 => h3.replaceWith(document.createTextNode(`\n${h3.textContent.trim()}\n`)));
+        tempDiv.querySelectorAll('hr').forEach(hr => hr.replaceWith(document.createTextNode('\n---\n')));
+        tempDiv.querySelectorAll('.svp-error-message').forEach(em => em.remove());
+        let verseText = (tempDiv.textContent || tempDiv.innerText || '').replace(/<br\s*[/]?>/gi, '\n');
+        verseText = verseText.replace(/\n\s*\n/g, '\n\n').replace(/ {2,}/g, ' ').trim();
+        textToCopy += '\n' + verseText;
+
+        try {
+            await navigator.clipboard.writeText(textToCopy.trim());
+            copyButton.textContent = 'Copied!';
+            copyButton.style.backgroundColor = '#5cb85c'; copyButton.style.color = 'white';
+        } catch (err) {
+            console.error('[SVP] Failed to copy:', err);
+            copyButton.textContent = 'Fail!';
+            copyButton.style.backgroundColor = '#d9534f'; copyButton.style.color = 'white';
+        }
+        setTimeout(() => { copyButton.textContent = 'Copy'; applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv); }, 2500);
+    });
+
+    // ── Link button handler ──
+
+    linkButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!currentSelectionRefs || currentSelectionRefs.length === 0) return;
+        const firstRef = currentSelectionRefs[0];
+        const bgVersion = bibleGatewayVersionMap[translationSelect.value.toLowerCase()] || translationSelect.value.toUpperCase();
+        const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(firstRef.book)}%20${firstRef.chapter}&version=${bgVersion}`;
+        window.open(url, '_blank');
+    });
+
+    // ── Prevent interactions inside popup from dismissing it ──
+
+    translationSelect.addEventListener('mousedown', e => e.stopPropagation());
+    copyButton.addEventListener('mousedown', e => e.stopPropagation());
+    linkButton.addEventListener('mousedown', e => e.stopPropagation());
+    contentDiv.addEventListener('mousedown', e => e.stopPropagation());
+
+    // ── Listen for dark/light mode changes ──
+
+    if (typeof window !== 'undefined' && window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            applyPopupTheme(popup, translationSelect, actionsContainer, copyButton, linkButton, contentDiv);
+        });
+    }
+
+    // ── Register the dismiss-on-outside-click listener ──
+
+    setTimeout(() => {
         window.removeEventListener("mousedown", removePopup, true);
-        window.addEventListener("mousedown", removePopup, true); 
-        console.log("[SVP_DEBUG] content.js: (Re)added mousedown listener for removePopup via setTimeout.");
+        window.addEventListener("mousedown", removePopup, true);
     }, 200);
 }
+
+// ──────────────────────────────────────────────
+// Bootstrap listeners (only in browser environments)
+// ──────────────────────────────────────────────
 
 const isBrowserEnvironment = typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function';
 
 if (isBrowserEnvironment) {
     try {
-        console.log('[PSI-FIXED_DEBUG] content.js: Adding debounced mouseup listener.');
-        // Create the debounced version of our handler
         const debouncedHandler = debounce(handleTextSelectionEvent, SELECTION_DEBOUNCE_MS);
         document.addEventListener('mouseup', debouncedHandler);
-        console.log('[PSI-FIXED_DEBUG] content.js: Debounced mouseup listener ADDED.');
-
     } catch (e) {
-        console.error('[PSI_STABLE_DEBUG] content.js: CRITICAL GLOBAL ERROR (listener setup):', e, e.stack);
+        console.error('[SVP] Critical error during listener setup:', e);
     }
-} else {
-    console.log('[PSI_DEBUG] content.js: Skipping DOM event listener registration (non-browser environment).');
 }
 
 const canListenForRuntimeMessages =
-    typeof chrome !== 'undefined' &&
-    chrome.runtime &&
-    chrome.runtime.onMessage &&
-    typeof chrome.runtime.onMessage.addListener === 'function';
+    typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage && typeof chrome.runtime.onMessage.addListener === 'function';
 
 if (canListenForRuntimeMessages) {
-    console.log('[PSI_DEBUG] content.js: Adding onMessage listener.');
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        console.log('[PSI_DEBUG] content.js: onMessage received:', request);
-        // REMOVE getEsvApiKey message handler as it's no longer needed.
-        // if (request.action === "getEsvApiKey") {
-        //     if (chrome.storage && chrome.storage.sync) {
-        //         chrome.storage.sync.get({ esvToken: null }, items => {
-        //             console.log('[PSI_DEBUG] content.js: ESV token from storage for getEsvApiKey:', items.esvToken ? 'Exists' : 'Not found');
-        //             sendResponse({ esvApiKey: items.esvToken });
-        //         });
-        //         return true;
-        //   } else {
-        //         console.error("[PSI_DEBUG] content.js: chrome.storage.sync not available.");
-        //         sendResponse({ esvApiKey: null, error: "Storage API unavailable." });
-        //         return false;
-        //     }
-        // }
-        // Add other message handlers here if needed in the future.
-        return false; // Indicate that sendResponse will not be called asynchronously for other messages.
+        return false;
     });
-    console.log('[PSI_DEBUG] content.js: onMessage listener ADDED.');
-} else {
-    console.log('[PSI_DEBUG] content.js: chrome.runtime.onMessage not available; listener not registered.');
 }
 
-console.log('[PSI_STABLE_DEBUG] content.js: Script end.');
+// ──────────────────────────────────────────────
+// Exports for testing
+// ──────────────────────────────────────────────
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -632,6 +919,14 @@ if (typeof module !== 'undefined' && module.exports) {
         debounce,
         SINGLE_CHAPTER_BOOKS,
         handleTextSelectionEvent,
-        removePopup
+        removePopup,
+        fetchWithTimeout,
+        fetchVerses,
+        buildRefDisplayString,
+        applyPopupTheme,
+        adjustPopupPosition,
+        API_BASE_URLS,
+        osisBookMap,
+        bibleGatewayVersionMap
     };
 }

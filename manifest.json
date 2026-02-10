@@ -12,6 +12,7 @@
   "host_permissions": [
     "https://api.esv.org/*",
     "https://cdn.jsdelivr.net/*",
+    "https://raw.githubusercontent.com/*",
     "https://api.scripture.api.bible/*",
     "https://bible-api.com/*"
   ],
@@ -30,8 +31,7 @@
     {
       "resources": [ 
         "bibles.json", 
-        "browserActionPopup.js", 
-        "injectedPopup.js" 
+        "browserActionPopup.js"
       ],
       "matches": [ "<all_urls>" ]
     }
