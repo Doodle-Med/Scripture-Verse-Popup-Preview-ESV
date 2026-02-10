@@ -315,6 +315,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    if (openSettingsBtn) {
+        openSettingsBtn.onclick = () => {
+            // Use the MV3 runtime message to background service worker
+            if (chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({ action: 'openOptionsPage' }, () => {
+                    // Close the popup after opening settings
+                    window.close();
+                });
+            } else if (chrome.runtime && chrome.runtime.openOptionsPage) {
+                chrome.runtime.openOptionsPage();
+                window.close();
+            }
+        };
+    }
+
     goButton.onclick = handleGoClick;
     refInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
