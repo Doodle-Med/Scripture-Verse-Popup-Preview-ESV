@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Scripture Verse Popup Preview ESV",
-  "version": "2.0.0",
-  "description": "Instant Bible verse previews on hover. Multi-translation, ranges, chapters. Secure ESV API key option. Privacy focused.",
+  "version": "2.0.1",
+  "description": "Verse preview on select. Copy to clipboard; open on Bible Gateway. Multi-translation. Privacy focused.",
   "icons": {
     "16":  "icon_16.png",
     "48":  "icon_48.png",
@@ -20,6 +20,10 @@
     "default_popup": "popup.html",
     "default_title": "Verse lookup"
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "content_scripts": [
     {
       "matches": [ "<all_urls>" ],
@@ -29,15 +33,8 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": [ 
-        "bibles.json", 
-        "browserActionPopup.js"
-      ],
+      "resources": [ "bibles.json" ],
       "matches": [ "<all_urls>" ]
     }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';"
-  },
-  "options_page": "options.html"
+  ]
 }

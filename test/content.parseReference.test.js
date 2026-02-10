@@ -62,6 +62,28 @@ test('parses a range that spans multiple chapters', () => {
   assert.equal(result.endVerse, 5);
 });
 
+test('parses 2 Corinthians 2:12-3:3 (cross-chapter range)', () => {
+  const { parseReference } = loadContentModule();
+  const result = parseReference('2 Corinthians 2:12-3:3');
+  assert.ok(result);
+  assert.equal(result.book, '2 Corinthians');
+  assert.equal(result.chapter, 2);
+  assert.equal(result.startVerse, 12);
+  assert.equal(result.endChapter, 3);
+  assert.equal(result.endVerse, 3);
+});
+
+test('parses Corinthians 2:12–3:3 with en-dash (alias for 2 Corinthians)', () => {
+  const { parseReference } = loadContentModule();
+  const result = parseReference('Corinthians 2:12–3:3');
+  assert.ok(result);
+  assert.equal(result.book, '2 Corinthians');
+  assert.equal(result.chapter, 2);
+  assert.equal(result.startVerse, 12);
+  assert.equal(result.endChapter, 3);
+  assert.equal(result.endVerse, 3);
+});
+
 test('defaults to chapter one when only a book name is provided', () => {
   const { parseReference } = loadContentModule();
   const result = parseReference('Genesis');

@@ -5,12 +5,15 @@
   "devDependencies": {
     "chrome-webstore-upload-cli": "^3.0.0",
     "jq-cli-wrapper": "^1.6.1",
-    "jsdom": "^27.0.0"
+    "jsdom": "^27.0.0",
+    "@playwright/test": "^1.49.0"
   },
   "scripts": {
     "bump": "jq '.version |= (split(\".\") | [.[0], .[1], ((.[2]|tonumber)+1)] | join(\".\"))' manifest.json > m.tmp && mv m.tmp manifest.json",
     "test": "node --test",
-    "zip": "zip -r extension.zip . -x '*.git*' '*.github*' 'node_modules/*'",
-    "publish": "npx chrome-webstore-upload-cli upload --source extension.zip && npx chrome-webstore-upload-cli publish"
+    "zip": "zip -r extension.zip . -x '*.git*' '*.github*' 'node_modules/*' 'test/*' '*.md' 'package*.json' 'new.png' 'injectedPopup.js'",
+    "publish": "npx chrome-webstore-upload-cli upload --source extension.zip && npx chrome-webstore-upload-cli publish",
+    "test:e2e": "node test/extension-e2e.spec.mjs",
+    "test:extension:open": "HEADED=1 node test/extension-e2e.spec.mjs"
   }
 }

@@ -1,15 +1,27 @@
 # Testing the Scripture Verse Popup Extension in Chrome
 
-Use this guide to test the extension after loading it unpacked in Chrome.
+## Option A: One command (Chromium + extension + test page)
 
-## 1. Load the extension
+From the project root, run:
+
+```bash
+npm run test:extension:open
+```
+
+A Chromium window opens with the extension already loaded and the test page at `http://localhost:39393/test/test-page.html`. **Select “John 3:16”** on the page (drag to highlight); the verse popup should appear. The window stays open for 45 seconds so you can try other references. Requires `npm install` and `npx playwright install chromium` (done once).
+
+## Option B: Load in Chrome (Developer mode)
+
+Use this guide to test in your normal Chrome with the extension loaded unpacked.
+
+### 1. Load the extension
 
 1. Open Chrome and go to `chrome://extensions`.
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and select the extension folder (the one containing `manifest.json`).
 4. Confirm the extension appears and is enabled. Note any errors in the extension’s “Errors” link.
 
-## 2. In-page popup (content script)
+### 2. In-page popup (content script)
 
 1. Open `test/test-page.html` in Chrome:
    - Either drag `test/test-page.html` into Chrome, or
@@ -24,7 +36,7 @@ Use this guide to test the extension after loading it unpacked in Chrome.
 9. **Close:** Click somewhere outside the popup. The popup should close.
 10. **Dark/light:** Toggle your OS or browser dark mode. Open a popup again; styling should match (dark background in dark mode, light in light mode).
 
-## 3. Browser action popup (toolbar)
+### 3. Browser action popup (toolbar)
 
 1. Click the extension icon in the Chrome toolbar.
 2. In the popup, pick a translation (e.g. KJV or WEB).
@@ -32,14 +44,14 @@ Use this guide to test the extension after loading it unpacked in Chrome.
 4. Verse text should appear below. Try a few references and translations.
 5. If you have ESV or api.bible keys set in Options, try ESV or NKJV/NASB and confirm they work.
 
-## 4. Options page
+### 4. Options page
 
 1. Right‑click the extension icon → **Options** (or open from `chrome://extensions` → extension → “Details” → “Extension options”).
 2. Set **Default translation** (e.g. KJV or WEB). Save. Open a new in-page popup; it should use this default (unless you had already chosen another translation in a previous popup, which is remembered).
 3. (Optional) Enter **ESV API token** from [esv.org](https://www.esv.org/account/api/). Save. Use ESV in a popup; verse should load.
 4. (Optional) Enter **api.bible API key** from [scripture.api.bible](https://scripture.api.bible/). Save. Use NKJV or NASB in a popup; verse should load.
 
-## 5. Quick checklist
+### 5. Quick checklist
 
 - [ ] Extension loads without errors at `chrome://extensions`.
 - [ ] In-page popup appears when selecting a single verse (e.g. John 3:16).
@@ -53,6 +65,22 @@ Use this guide to test the extension after loading it unpacked in Chrome.
 - [ ] No console errors on test page or options page (F12 → Console).
 
 ## 6. Automated tests (Node)
+
+**Unit tests (no browser):**
+
+```bash
+npm test
+```
+
+All 30 tests should pass (content script behavior, parsing, helpers, bibles data, DOM popup, dark mode).
+
+**E2E (headless Chromium + extension):**
+
+```bash
+npm run test:e2e
+```
+
+Note: Content scripts may not inject reliably in headless automation; if this fails, use **Option A** or **Option B** to test manually.
 
 From the project root:
 

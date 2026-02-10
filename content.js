@@ -83,6 +83,7 @@ const bookMap = {
   "romans": "Romans", "rom": "Romans", "ro": "Romans", "rm": "Romans",
   "1 corinthians": "1 Corinthians", "1corinthians": "1 Corinthians", "1cor": "1 Corinthians", "1co": "1 Corinthians", "1 cor": "1 Corinthians", "i corinthians": "1 Corinthians", "i cor": "1 Corinthians", "first corinthians": "1 Corinthians",
   "2 corinthians": "2 Corinthians", "2corinthians": "2 Corinthians", "2cor": "2 Corinthians", "2co": "2 Corinthians", "2 cor": "2 Corinthians", "ii corinthians": "2 Corinthians", "ii cor": "2 Corinthians", "second corinthians": "2 Corinthians",
+  "corinthians": "2 Corinthians",
   "galatians": "Galatians", "gal": "Galatians", "ga": "Galatians",
   "ephesians": "Ephesians", "eph": "Ephesians", "ephes": "Ephesians", "ep": "Ephesians",
   "philippians": "Philippians", "phil": "Philippians", "php": "Philippians", "ph": "Philippians", "philip": "Philippians", "phlp": "Philippians",

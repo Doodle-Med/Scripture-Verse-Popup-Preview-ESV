@@ -284,6 +284,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     await populateTranslationDropdown();
+
+    const popupEsvKey = document.getElementById('popupEsvKey');
+    const popupBibleApiKey = document.getElementById('popupBibleApiKey');
+    const popupSaveKeys = document.getElementById('popupSaveKeys');
+    const popupKeysStatus = document.getElementById('popupKeysStatus');
+    if (chrome.storage && chrome.storage.sync && popupEsvKey && popupBibleApiKey) {
+        chrome.storage.sync.get(
+            { [STORAGE_KEY_USER_ESV_API_KEY]: '', [STORAGE_KEY_USER_BIBLE_API_KEY]: '' },
+            (items) => {
+                popupEsvKey.value = items[STORAGE_KEY_USER_ESV_API_KEY] || '';
+                popupBibleApiKey.value = items[STORAGE_KEY_USER_BIBLE_API_KEY] || '';
+            }
+        );
+        if (popupSaveKeys) {
+            popupSaveKeys.onclick = () => {
+                const esv = (popupEsvKey && popupEsvKey.value) ? popupEsvKey.value.trim() : '';
+                const bible = (popupBibleApiKey && popupBibleApiKey.value) ? popupBibleApiKey.value.trim() : '';
+                chrome.storage.sync.set(
+                    { [STORAGE_KEY_USER_ESV_API_KEY]: esv, [STORAGE_KEY_USER_BIBLE_API_KEY]: bible },
+                    () => {
+                        if (popupKeysStatus) {
+                            popupKeysStatus.textContent = 'Saved.';
+                            popupKeysStatus.style.color = 'green';
+                            setTimeout(() => { popupKeysStatus.textContent = ''; }, 2500);
+                        }
+                    }
+                );
+            };
+        }
+    }
+
     goButton.onclick = handleGoClick;
     refInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
