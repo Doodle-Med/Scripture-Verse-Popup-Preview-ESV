@@ -1,9 +1,12 @@
+# Publish to Chrome Web Store.
+# Uses API v2 when CHROME_PUBLISHER_ID is set; otherwise falls back to v1.1 (works with existing secrets).
+
 name: Publish to Chrome Web Store
 
 on:
   push:
     branches:
-      - main # Or your primary branch if different
+      - main
 
 jobs:
   publish:
@@ -15,24 +18,22 @@ jobs:
       - name: Bump Version in manifest.json
         id: bump_version
         run: |
-          MANIFEST_PATH="manifest.json" # Files are now at the root
+          MANIFEST_PATH="manifest.json"
           if [ ! -f "$MANIFEST_PATH" ]; then
-            echo "Error: manifest.json not found at $MANIFEST_PATH. Current directory contents:"
+            echo "Error: manifest.json not found. Current directory:"
             ls -la
             exit 1
           fi
-          TMP_MANIFEST="/tmp/m.tmp"
-          # Ensure current_version is correctly fetched before attempting to increment
           current_version_val=$(jq -r .version "$MANIFEST_PATH")
           if [ -z "$current_version_val" ] || [ "$current_version_val" == "null" ]; then
-            echo "Error: Could not read current version from $MANIFEST_PATH. Content:"
+            echo "Error: Could not read version from $MANIFEST_PATH"
             cat "$MANIFEST_PATH"
             exit 1
           fi
+          TMP_MANIFEST="/tmp/m.tmp"
           jq --arg current_version "$current_version_val" \
              '.version = ($current_version | split(".") | .[0] + "." + .[1] + "." + ((.[2]|tonumber)+1|tostring))' \
              "$MANIFEST_PATH" > "$TMP_MANIFEST" && mv "$TMP_MANIFEST" "$MANIFEST_PATH"
-          
           NEW_VERSION=$(jq -r .version "$MANIFEST_PATH")
           echo "New version: $NEW_VERSION"
           echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
@@ -40,9 +41,6 @@ jobs:
 
       - name: Inject default API keys (GitHub Secrets → placeholders)
         run: |
-          # Replace placeholder API keys with real keys from GitHub Secrets
-          # so the published extension works out of the box for end users.
-          # Source code on GitHub never contains the real keys.
           if [ -n "$ESV_API_KEY" ]; then
             sed -i "s|__ESV_API_KEY_PLACEHOLDER__|${ESV_API_KEY}|g" bibles.json
             echo "✓ ESV API key injected"
@@ -62,42 +60,116 @@ jobs:
 
       - name: Create ZIP file
         run: |
-          # Package only extension files. Including node_modules/test/etc causes 400 from Chrome Web Store API.
           zip -r extension.zip . \
             -x ".git*" \
             -x ".github/*" \
             -x "node_modules/*" \
             -x "test/*" \
+            -x "gas/*" \
             -x "*.DS_Store" \
             -x "package.json" \
             -x "package-lock.json" \
             -x "*.md" \
             -x ".gitignore" \
-            -x "Downloads/*"
+            -x "Downloads/*" \
+            -x "extension.zip"
           echo "ZIP size: $(du -h extension.zip | cut -f1)"
         shell: bash
 
-      - name: Upload to Chrome Web Store
-        uses: mnao305/chrome-extension-upload@v5.0.0
-        with:
-          file-path: extension.zip
-          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
-          client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          publish: false
+      - name: Get OAuth2 access token
+        id: token
+        run: |
+          RESP=$(curl -sS -X POST "https://oauth2.googleapis.com/token" \
+            -d "client_id=$CHROME_CLIENT_ID" \
+            -d "client_secret=$CHROME_CLIENT_SECRET" \
+            -d "refresh_token=$CHROME_REFRESH_TOKEN" \
+            -d "grant_type=refresh_token")
+          ACCESS_TOKEN=$(echo "$RESP" | jq -r .access_token)
+          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
+            echo "Failed to get access token. Response:"
+            echo "$RESP" | jq .
+            exit 1
+          fi
+          echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
+        env:
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        shell: bash
+
+      - name: Set upload method
+        id: upload_method
+        run: |
+          if [ -n "$CHROME_PUBLISHER_ID" ]; then
+            echo "use_v2=true" >> $GITHUB_OUTPUT
+          else
+            echo "use_v2=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+        shell: bash
+
+      - name: Upload to Chrome Web Store (API v2)
+        if: steps.upload_method.outputs.use_v2 == 'true'
+        run: |
+          UPLOAD_URL="https://chromewebstore.googleapis.com/upload/v2/publishers/${CHROME_PUBLISHER_ID}/items/${CHROME_EXTENSION_ID}:upload"
+          HTTP_CODE=$(curl -sS -w "%{http_code}" -o /tmp/upload_response.json \
+            -X POST "$UPLOAD_URL" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "x-goog-api-version: 2" \
+            -T extension.zip)
+          BODY=$(cat /tmp/upload_response.json)
+          echo "Upload response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Upload succeeded (v2)."
+            echo "$BODY" | jq .
+          else
+            echo "Upload failed with HTTP $HTTP_CODE"
+            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+            exit 1
+          fi
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          ACCESS_TOKEN: ${{ steps.token.outputs.token }}
+        shell: bash
+
+      - name: Upload to Chrome Web Store (API v1.1 fallback)
+        if: steps.upload_method.outputs.use_v2 != 'true'
+        run: |
+          # Legacy v1.1 (still supported until Oct 2026). Only needs extension ID.
+          UPLOAD_URL="https://www.googleapis.com/upload/chromewebstore/v1.1/items/${CHROME_EXTENSION_ID}?uploadType=media"
+          HTTP_CODE=$(curl -sS -w "%{http_code}" -o /tmp/upload_response.json \
+            -X PUT "$UPLOAD_URL" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/zip" \
+            --data-binary @extension.zip)
+          BODY=$(cat /tmp/upload_response.json)
+          echo "Upload response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Upload succeeded (v1.1). Add CHROME_PUBLISHER_ID for v2 (see DEPLOY.md)."
+            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+          else
+            echo "Upload failed with HTTP $HTTP_CODE"
+            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+            exit 1
+          fi
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          ACCESS_TOKEN: ${{ steps.token.outputs.token }}
+        shell: bash
 
       - name: Commit and Push Version Bump
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add manifest.json # Path is now direct (root)
-          # Check if there are changes to commit
+          git add manifest.json
           if ! git diff --staged --quiet; then
             git commit -m "Bump version to ${{ steps.bump_version.outputs.VERSION }} [skip ci]"
             git push
           else
-            echo "No changes to commit for version bump (manifest.json likely unchanged)."
+            echo "No changes to commit for version bump."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
