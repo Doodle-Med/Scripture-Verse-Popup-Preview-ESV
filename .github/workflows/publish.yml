@@ -11,6 +11,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required for git push after version bump
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,15 +81,21 @@ jobs:
       - name: Get OAuth2 access token
         id: token
         run: |
-          RESP=$(curl -sS -X POST "https://oauth2.googleapis.com/token" \
+          set -e
+          echo "::group::Token request response"
+          RESP=$(curl -sS -w "\n%{http_code}" -X POST "https://oauth2.googleapis.com/token" \
             -d "client_id=$CHROME_CLIENT_ID" \
             -d "client_secret=$CHROME_CLIENT_SECRET" \
             -d "refresh_token=$CHROME_REFRESH_TOKEN" \
             -d "grant_type=refresh_token")
-          ACCESS_TOKEN=$(echo "$RESP" | jq -r .access_token)
+          HTTP_CODE=$(echo "$RESP" | tail -n1)
+          BODY=$(echo "$RESP" | sed '$d')
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+          echo "::endgroup::"
+          ACCESS_TOKEN=$(echo "$BODY" | jq -r .access_token)
           if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "Failed to get access token. Response:"
-            echo "$RESP" | jq .
+            echo "::error::Failed to get access token. Check CHROME_CLIENT_ID, CHROME_CLIENT_SECRET, CHROME_REFRESH_TOKEN. Regenerate refresh token at https://developers.google.com/oauthplayground (scope: https://www.googleapis.com/auth/chromewebstore)."
             exit 1
           fi
           echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
@@ -137,21 +145,24 @@ jobs:
       - name: Upload to Chrome Web Store (API v1.1 fallback)
         if: steps.upload_method.outputs.use_v2 != 'true'
         run: |
-          # Legacy v1.1 (still supported until Oct 2026). Only needs extension ID.
+          set -e
+          # Legacy v1.1: PUT zip with Authorization only (no Content-Type; match chrome-webstore-upload lib).
           UPLOAD_URL="https://www.googleapis.com/upload/chromewebstore/v1.1/items/${CHROME_EXTENSION_ID}?uploadType=media"
+          echo "Uploading to Chrome Web Store (v1.1)..."
           HTTP_CODE=$(curl -sS -w "%{http_code}" -o /tmp/upload_response.json \
             -X PUT "$UPLOAD_URL" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "Content-Type: application/zip" \
-            --data-binary @extension.zip)
+            -H "x-goog-api-version: 2" \
+            -T extension.zip)
           BODY=$(cat /tmp/upload_response.json)
-          echo "Upload response ($HTTP_CODE): $BODY"
+          echo "::group::Chrome Web Store upload response"
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+          echo "::endgroup::"
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "Upload succeeded (v1.1). Add CHROME_PUBLISHER_ID for v2 (see DEPLOY.md)."
-            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+            echo "Upload succeeded (v1.1)."
           else
-            echo "Upload failed with HTTP $HTTP_CODE"
-            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+            echo "::error::Chrome Web Store upload failed (HTTP $HTTP_CODE). If 400: ensure manifest version was bumped and zip contains no invalid files. If 403: check refresh token and extension ID."
             exit 1
           fi
         env:
@@ -166,10 +177,11 @@ jobs:
           git add manifest.json
           if ! git diff --staged --quiet; then
             git commit -m "Bump version to ${{ steps.bump_version.outputs.VERSION }} [skip ci]"
-            git push
+            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
           else
-            echo "No changes to commit for version bump."
+            echo "No version change to commit (manifest.json unchanged)."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         shell: bash

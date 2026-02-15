@@ -1,8 +1,8 @@
 # Deploying to the Chrome Web Store
 
-The GitHub Action **Publish to Chrome Web Store** runs on every push to `main`. It bumps the version in `manifest.json`, zips only the extension files (no `node_modules` or tests), and uploads to the Chrome Web Store.
+The GitHub Action **Publish to Chrome Web Store** runs on every push to `main`. It bumps the version in `manifest.json`, zips only the extension files (no `node_modules`, `test/`, or `gas/`), and uploads using the **Chrome Web Store API v2**.
 
-To avoid **400 Bad Request** from the upload step, do the following one-time setup and ensure your GitHub secrets are set correctly.
+The previous workflow used a third-party action that called the deprecated **API v1.1**, which now returns **400 Bad Request**. This repo uses the official v2 upload endpoint directly.
 
 ---
 
@@ -14,7 +14,9 @@ The Chrome Web Store API can only **update** an existing item. It cannot create 
 2. Sign in with the Google account that will own the extension.
 3. Click **New item**, upload your extension ZIP (you can run `npm run zip` in this repo to create one), and submit the first version.
 4. Complete the **Store listing** and **Privacy** tabs (required before publishing).
-5. After the item is created, open it in the dashboard. The **Extension ID** is in the URL or the item details (e.g. `abcdefghijklmnopqrstuvwxyzabcdef`). Copy this; you will use it as `CHROME_EXTENSION_ID`.
+5. Note two IDs from the dashboard:
+   - **Extension ID**: In the item URL or item details (e.g. `abcdefghijklmnopqrstuvwxyzabcdef`). Use as `CHROME_EXTENSION_ID`.
+   - **Publisher ID**: In the **Account** section of the dashboard (not inside a single item). Use as `CHROME_PUBLISHER_ID` for API v2.
 
 ---
 
@@ -36,24 +38,26 @@ Summary:
    - In “Input your own scopes” enter: `https://www.googleapis.com/auth/chromewebstore`  
    - **Authorize APIs** → sign in with the **same Google account** that owns the extension in the Developer Dashboard.  
    - **Exchange authorization code for tokens**.  
-   - Copy the **Refresh token** (long string; keep it secret).
+   - Copy the **Refresh token** (long string; keep it secret). This is what you store as `CHROME_REFRESH_TOKEN`.
 
 Requirements:
 
 - 2-step verification must be enabled on the Google account used for the dashboard and Playground.
+- **Refresh tokens can expire or be revoked.** If the workflow fails with `invalid_grant`, regenerate a new refresh token (repeat the Playground steps above) and update the `CHROME_REFRESH_TOKEN` secret in GitHub.
 
 ---
 
 ## 3. GitHub repository secrets
 
-In your repo: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**. Add these four (names must match exactly):
+In your repo: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**. Add these **five** secrets (names must match exactly):
 
-| Secret name              | Value |
-|--------------------------|--------|
-| `CHROME_EXTENSION_ID`    | The extension ID from the Developer Dashboard (step 1). |
-| `CHROME_CLIENT_ID`       | OAuth Client ID from Google Cloud Console (step 2). |
-| `CHROME_CLIENT_SECRET`   | OAuth Client secret from Google Cloud Console (step 2). |
-| `CHROME_REFRESH_TOKEN`   | Refresh token from OAuth Playground (step 2). |
+| Secret name               | Value |
+|---------------------------|--------|
+| `CHROME_PUBLISHER_ID`     | Publisher ID from the Developer Dashboard **Account** section (required for API v2). |
+| `CHROME_EXTENSION_ID`     | The extension ID from the item in the Developer Dashboard. |
+| `CHROME_CLIENT_ID`        | OAuth Client ID from Google Cloud Console (step 2). |
+| `CHROME_CLIENT_SECRET`    | OAuth Client secret from Google Cloud Console (step 2). |
+| `CHROME_REFRESH_TOKEN`    | Refresh token from OAuth Playground (step 2). |
 
 After saving, the next run of the **Publish to Chrome Web Store** workflow (on push to `main`) will use these secrets.
 
@@ -61,15 +65,31 @@ After saving, the next run of the **Publish to Chrome Web Store** workflow (on p
 
 ## 4. Workflow behavior
 
-- **Upload**: The action uploads the new package to the existing store item (version in `manifest.json` is bumped automatically).  
-- **Publish**: The workflow is set to `publish: false`, so the new version is **only uploaded**, not published. To publish from the action, set `publish: true` in `.github/workflows/publish.yml` under the upload step, or publish manually from the [Developer Dashboard](https://chrome.google.com/webstore/devconsole/).
+- **Upload**: The workflow uploads the new package to the existing store item using API v2 (`publishers/{publisherId}/items/{itemId}:upload`). The version in `manifest.json` is bumped automatically.  
+- **Publish**: The workflow **only uploads**; it does not call the publish endpoint. After upload, open the [Developer Dashboard](https://chrome.google.com/webstore/devconsole/), open your item, and click **Submit for review** / **Publish** when you are ready.
 
 ---
 
-## 5. If you still get 400 Bad Request
+## 5. Verified CRX uploads (opt-in)
 
-- Confirm the extension was **uploaded at least once manually** and the ID you use is the one from the dashboard.  
-- Confirm **CHROME_EXTENSION_ID** is the full ID (no spaces or quotes).  
-- Regenerate the **refresh token** (OAuth Playground, same scope, same Google account that owns the extension).  
-- Ensure the zip does not include `node_modules` or other non-extension files (the workflow excludes them).  
-- Check [Chrome Web Store API status](https://developer.chrome.com/docs/webstore/api) and any quota/errors in [Google Cloud Console](https://console.cloud.google.com) for your project.
+In the Developer Dashboard → **Package** tab you may see an option to **Opt in** to “Verified uploads” and provide a **public key (PEM)**.
+
+- **You do not need to opt in** for the GitHub Action or manual ZIP uploads to work. Without opting in, Google continues to sign your package when you upload a ZIP; the workflow and dashboard behave as before.
+- **If you opt in**: Only packages signed with your private key (matching the public key you provided) will be accepted. You must then sign your ZIP/CRX with that key before uploading (e.g. in CI). Losing the private key or opting out later can block updates until Chrome Web Store support assists you.
+
+Recommendation: leave Verified CRX **off** unless you have a clear need and a safe way to generate and store the key pair and sign builds in CI.
+
+---
+
+## 6. If the workflow fails
+
+### "invalid_grant" or "Bad Request" when getting the access token
+
+The refresh token is expired or invalid. Regenerate it at [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) (scope: `https://www.googleapis.com/auth/chromewebstore`, using your own OAuth credentials) and update the **CHROME_REFRESH_TOKEN** secret in **Settings → Secrets and variables → Actions**. Then re-run the workflow.
+
+### Upload fails with HTTP 400 or 403
+
+- Confirm **CHROME_EXTENSION_ID** is the full 32-character ID from the dashboard (no spaces or quotes).
+- If using v2: confirm **CHROME_PUBLISHER_ID** is set and matches the **Account** section in the Developer Dashboard.
+- Ensure the zip does not include `node_modules`, `test/`, or `gas/` (the workflow excludes them).
+- Check [Chrome Web Store API](https://developer.chrome.com/docs/webstore/api) and any errors in [Google Cloud Console](https://console.cloud.google.com) for your project.
