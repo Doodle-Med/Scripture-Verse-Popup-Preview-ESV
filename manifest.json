@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Scripture Verse Popup Preview ESV",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Verse preview on select. Copy to clipboard; open on Bible Gateway. Multi-translation. Privacy focused.",
   "icons": {
-    "16":  "icon_16.png",
-    "48":  "icon_48.png",
+    "16": "icon_16.png",
+    "48": "icon_48.png",
     "128": "icon_128.png"
   },
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "https://api.esv.org/*",
     "https://cdn.jsdelivr.net/*",
@@ -31,15 +33,23 @@
   },
   "content_scripts": [
     {
-      "matches": [ "<all_urls>" ],
-      "js": [ "content.js" ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": [ "bibles.json" ],
-      "matches": [ "<all_urls>" ]
+      "resources": [
+        "bibles.json"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
